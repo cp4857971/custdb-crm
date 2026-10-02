@@ -1,7 +1,7 @@
 # ============================================================
 # 通信客户资料库 · docker compose 一键部署
 # 用法：
-#   1) 先构建镜像：docker build -t custdb:0.0.21 ./backend
+#   1) 先构建镜像：docker build -t custdb:0.0.23 ./backend
 #   2) 本文件与 backend/ 同级（项目根）时：
 #      docker compose up -d
 #   3) 浏览器访问：http://NAS或服务器IP:5001/app/custdb
@@ -9,7 +9,7 @@
 # ============================================================
 services:
   custdb:
-    image: custdb:0.0.21          # 使用已构建镜像；若想现场构建，改用下方 build 块并注释本行
+    image: custdb:0.0.23          # 使用已构建镜像；若想现场构建，改用下方 build 块并注释本行
     # build:
     #   context: ./backend
     container_name: custdb
