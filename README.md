@@ -42,6 +42,8 @@
 
 ## 目录结构
 
+> 📖 **部署配置教程**（Windows / Linux 服务端、Docker、fnOS、客户端、公网访问）：见 [docs/DEPLOY-GUIDE.md](docs/DEPLOY-GUIDE.md)
+
 ```
 tel-custdb-fnos/
 ├── backend/            # Express 后端：CRUD API + 到期提醒计算 + 数据存储
