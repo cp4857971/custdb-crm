@@ -86,6 +86,11 @@ fnpack build --directory custdb
 
 > **打包要点（v0.0.4 修复）**：构建脚本会自动清理 `node_modules/.bin` 及所有指向构建机绝对路径的符号链接——此类链接会导致 NAS 安装时报“解压 app.tgz 失败”。若自行打包，请勿把构建机绝对路径符号链接打进 `app/server`。
 
+> **直接安装（推荐）**：仓库根目录已提供现成的 **`custdb.fpk`（v0.0.23）**，可直接下载后在 fnOS 应用中心手动安装：
+> https://github.com/cp4857971/custdb-crm/raw/main/custdb.fpk
+>
+> 也可在 **Releases**（https://github.com/cp4857971/custdb-crm/releases ）下载发布包。
+
 ### 安装到飞牛 fnOS
 
 1. 飞牛系统 **应用中心 → 右上角设置 → 开发者模式（开启）**；
