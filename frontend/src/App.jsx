@@ -163,6 +163,10 @@ function FormModal({ initial, onClose, onSave, plans, addons }) {
             <label className="full">套餐名称
               <input list="cust-plan-list" value={form.planName} onChange={(e) => set("planName", e.target.value)} placeholder="从套餐业务库选择或自行输入（随运营商过滤）" />
               <datalist id="cust-plan-list">{(plans || []).filter((p) => !form.operator || !p.operator || p.operator === form.operator).map((p) => <option key={p.id} value={p.name} />)}</datalist>
+              {form.operator && (() => {
+                const opts = (plans || []).filter((p) => !p.operator || p.operator === form.operator);
+                return opts.length ? <div className="chips">{(form.operator ? opts : []).map((p) => <button type="button" key={p.id} className="chip-btn" title={(p.category || "") + (p.monthlyFee ? " ¥" + p.monthlyFee + "/月" : "")} onClick={() => set("planName", p.name)}>{p.name}</button>)}</div> : null;
+              })()}
             </label>
             <label>套餐费用（元/月）<input value={form.planFee} onChange={(e) => set("planFee", e.target.value)} placeholder="99" inputMode="decimal" /></label>
             <label>折扣<input value={form.discount} onChange={(e) => set("discount", e.target.value)} placeholder="如：8折、95折、免月租" /></label>
@@ -262,6 +266,10 @@ function PortinFormModal({ initial, onClose, onSave, plans, addons }) {
             <label className="full">套餐名称
               <input list="portin-plan-list" value={form.planName} onChange={(e) => set("planName", e.target.value)} placeholder="从套餐业务库选择或自行输入（随运营商过滤）" />
               <datalist id="portin-plan-list">{(plans || []).filter((p) => !form.operator || !p.operator || p.operator === form.operator).map((p) => <option key={p.id} value={p.name} />)}</datalist>
+              {form.operator && (() => {
+                const opts = (plans || []).filter((p) => !p.operator || p.operator === form.operator);
+                return opts.length ? <div className="chips">{(form.operator ? opts : []).map((p) => <button type="button" key={p.id} className="chip-btn" title={(p.category || "") + (p.monthlyFee ? " ¥" + p.monthlyFee + "/月" : "")} onClick={() => set("planName", p.name)}>{p.name}</button>)}</div> : null;
+              })()}
             </label>
             <label className="full">套餐费用（元/月）<input value={form.planFee} onChange={(e) => set("planFee", e.target.value)} placeholder="99" inputMode="decimal" /></label>
             <label className="full">折扣<input value={form.discount} onChange={(e) => set("discount", e.target.value)} placeholder="如：8折、95折、免月租" /></label>
