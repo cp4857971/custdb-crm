@@ -155,3 +155,20 @@ cd backend && docker build -t custdb:0.0.23 .
 - 重新构建：`npm install && export PATH="$PWD/tools:$PATH" && node scripts/build-combined.js`
 - 新前端 bundle：`index-DgR8XVQV.js`；新安装包 `custdb.fpk`（md5 a83db5d844e9…，5.38MB）
 - 已同步 GitHub 仓库 `cp4857971/custdb-crm`（main 分支）：App.jsx 源码、两侧 public 前端产物、新版 fpk、CHANGELOG.md；旧版 JS bundle 已清理，git clone 终验通过。
+
+---
+
+## 八、Windows / Linux 桌面版（v0.0.23 增强）
+
+**需求**：Windows 服务器 / Linux 服务器部署（服务端 EXE + 客户端 EXE），同步 Docker，上传资料库。
+
+**技术方案**：
+- **单文件 EXE 打包**：`@yao-pkg/pkg`（社区维护版，支持 Node 22 target）打包 Node 后端 → Windows x64 EXE 与 Linux x64 可执行文件；**node:sqlite（Node 22 内置）无需任何外部原生依赖**，实测 SQLite 建库/读写正常。
+- **服务端发布形态**：EXE + 旁置 `web/` 前端界面目录（pkg 虚拟文件系统不支持流式静态读取，故静态资源采用真实目录，EXE 启动时 `PUBLIC_DIR = exe 旁 web/`）；数据目录 `custdb-data/`（EXE 旁，可整体备份/迁移）；端口/路径由 `PORT` / `GATEWAY_PREFIX` 环境变量控制。
+- **客户端（启动器）**：pkg 打包的轻量 Node 程序，读取旁置 `client-config.json` 服务端地址 → 自动打开默认浏览器访问；Windows 用 `cmd start`，Linux 用 `xdg-open`；数据全部在服务端，客户端无本地数据。
+- **Docker 同步**：`backend/Dockerfile` 与 `docker-compose.yml` 版本注释同步为 0.0.23（node:22-slim + node:sqlite，与 EXE 同一套后端代码）。
+
+**验证**：
+- Linux 服务端（release/server-linux 形态）：首页 200、静态 JS 200、登录成功、EXE 旁 custdb-data 建库成功
+- Linux 客户端：配置读取正确、正常打开浏览器（headless 环境 xdg-open 失败被捕获，程序正常退出）
+- 四个发布包：`custdb-server-win-x64.zip` / `custdb-server-linux-x64.zip` / `custdb-client-win-x64.zip` / `custdb-client-linux-x64.zip`
