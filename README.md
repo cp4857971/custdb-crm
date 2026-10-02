@@ -202,6 +202,15 @@ fnpack build --directory custdb
 - 端口/路径环境变量：`PORT`（默认 5001）、`GATEWAY_PREFIX`（默认 /app/custdb）
 - 客户端与服务端、Docker、fnOS 原生应用、安卓 APP **完全互通互联**（同一套数据与账号）
 
+> **大文件分卷下载**（GitHub 网页单文件上限 25MB，故大包拆为分卷存放于仓库 `releases/`）：
+> - `sp_server-win.z01` + `sp_server-win.zip` → 合并为 **custdb-server-win-x64.zip**
+> - `sp_server-linux.z01` + `sp_server-linux.zip` → 合并为 **custdb-server-linux-x64.zip**
+> - `sp_client-linux.z01` + `sp_client-linux.zip` → 合并为 **custdb-client-linux-x64.zip**
+> 合并方法（三个包通用，把对应分卷放同一目录）：
+> - **Windows**：用 7-Zip 打开 `sp_xxx.zip`（自动识别 .z01 分卷）直接解压；或 `copy /b sp_xxx.z01+sp_xxx.zip 目标.zip` 后解压
+> - **Linux**：`zip -s 0 sp_server-win.zip --out custdb-server-win-x64.zip && unzip custdb-server-win-x64.zip`
+> （分卷仅解决上传限制，内容与本地完整 zip 完全一致）
+
 ## 六、隐私提示
 
 身份证住址、联系电话属于个人信息保护法中的**敏感个人信息**。本应用数据保存在你自有 NAS 的数据目录中，
