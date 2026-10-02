@@ -157,7 +157,7 @@ function FormModal({ initial, onClose, onSave, plans, addons }) {
         <form onSubmit={submit}>
           <div className="grid">
             <label>姓名 *<input value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="客户姓名" /></label>
-            <label>联系电话 *<input value={form.phone} onChange={(e) => { const v = e.target.value; set("phone", v); autoOp(v); }} placeholder="手机号码（自动识别运营商）" inputMode="tel" /></label>
+            <label>联系电话 *<input value={form.phone} maxLength={11} onChange={(e) => { const v = e.target.value; set("phone", v); autoOp(v); }} placeholder="手机号码（自动识别运营商）" inputMode="tel" /></label>
             <label className="full">身份证住址<input value={form.idAddress} onChange={(e) => set("idAddress", e.target.value)} placeholder="证件登记地址" /></label>
             <label className="full">装机地址<input value={form.installAddress} onChange={(e) => set("installAddress", e.target.value)} placeholder="宽带/线路实际安装地址" /></label>
             <label className="full">套餐名称
@@ -261,7 +261,7 @@ function PortinFormModal({ initial, onClose, onSave, plans, addons }) {
         </div>
         <form onSubmit={submit}>
           <div className="grid">
-            <label className="full">联系电话 *<input value={form.phone} onChange={(e) => { const v = e.target.value; set("phone", v); autoOp(v); }} placeholder="手机号码（自动识别运营商）" inputMode="tel" /></label>
+            <label className="full">联系电话 *<input value={form.phone} maxLength={11} onChange={(e) => { const v = e.target.value; set("phone", v); autoOp(v); }} placeholder="手机号码（自动识别运营商）" inputMode="tel" /></label>
             <label className="full">家庭住址<input value={form.familyAddress} onChange={(e) => set("familyAddress", e.target.value)} placeholder="用户家庭住址" /></label>
             <label className="full">套餐名称
               <input list="portin-plan-list" value={form.planName} onChange={(e) => set("planName", e.target.value)} placeholder="从套餐业务库选择或自行输入（随运营商过滤）" />
