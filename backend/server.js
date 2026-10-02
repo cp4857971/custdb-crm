@@ -17,8 +17,14 @@ const XLSX = require("xlsx");
 const PORT_DEFAULT = 5001;
 const SOCKET_PATH = process.env.SOCKET_PATH || "";
 const GATEWAY_PREFIX = (process.env.GATEWAY_PREFIX || "/app/custdb").replace(/\/+$/, "");
-const PUBLIC_DIR = path.join(__dirname, "public");
-const DEFAULT_DATA_DIR = path.join(__dirname, "data");
+// 静态前端目录：本地开发 backend/public；单文件 EXE 发布形态 = exe 旁 web/ 目录
+const PUBLIC_DIR = process.pkg
+  ? path.join(path.dirname(process.execPath), "web")
+  : path.join(__dirname, "public");
+// 单文件 EXE（pkg 打包）下默认数据目录 = 可执行文件所在目录/custdb-data（虚拟快照目录不可写）
+const DEFAULT_DATA_DIR = process.pkg
+  ? path.join(path.dirname(process.execPath), "custdb-data")
+  : path.join(__dirname, "data");
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
@@ -1775,7 +1781,7 @@ api.get("/export", (req, res) => {
 
 app.use(GATEWAY_PREFIX + "/api", api);
 
-// 静态前端（本地开发时前端构建产物放在 backend/public）
+// 静态前端（本地开发：backend/public；EXE 发布形态：exe 旁 web/ 目录）
 if (fs.existsSync(PUBLIC_DIR)) {
   app.use(GATEWAY_PREFIX, express.static(PUBLIC_DIR));
 }
