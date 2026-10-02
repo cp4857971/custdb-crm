@@ -231,9 +231,11 @@ fnpack build --directory custdb
 
 ## 支持本项目
 
-如果本工具对你有帮助，欢迎通过 GitHub Sponsors 支持本项目：
+如果这个工具帮到了你，欢迎请作者喝杯咖啡 ☕ 扫一扫即可：
 
-👉 **https://github.com/cp4857971/custdb-crm#支持本项目**
+![支持本项目（微信/支付宝打赏）](assets/donate.png)
+
+你的支持是对开源项目最大的鼓励！
 
 ---
 
