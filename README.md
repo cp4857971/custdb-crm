@@ -4,6 +4,8 @@
 按飞牛 fnOS [Native 应用案例](https://developer.fnnas.com/docs/examples/native/) 规范制作：
 **Node.js 后端 + React 前端**，可打包为 `.fpk` 安装到飞牛 fnOS，界面按手机优先设计，适配安卓手机使用。
 
+<p align="center"><b><font size="6">💰 添加各省运营商套餐选择，请赞助该项目</font></b></p>
+
 ## 功能
 
 | 功能 | 说明 |
