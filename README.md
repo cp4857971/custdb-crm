@@ -228,3 +228,13 @@ fnpack build --directory custdb
 | POST | /api/import | 数据导入（multipart：file + mode=append/replace） |
 | GET | /api/settings | 存储方式 / 数据目录信息（设置页展示） |
 | GET | /api/health | 健康检查 |
+
+## 支持本项目
+
+如果本工具对你有帮助，欢迎通过 GitHub Sponsors 支持本项目：
+
+👉 **https://github.com/cp4857971/custdb-crm#支持本项目**
+
+---
+
+*开发者/发布者：cp · 仓库：https://github.com/cp4857971/custdb-crm*
