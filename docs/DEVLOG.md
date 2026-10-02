@@ -133,3 +133,25 @@ cd backend && docker build -t custdb:0.0.23 .
 | 端到端 | 完整服务启动：页面、登录、套餐库、号码识别、折扣链路、导出、统计 |
 | 打包 | 解包回读 + checksum 一致性 + 文件存在性核对 |
 | 仓库 | GitHub 上传后 get_file_contents 回读确认 |
+
+---
+
+## 七、本轮迭代同步（v0.0.23 增强）
+
+**2026-10-03 · 套餐名称运营商联动增强**
+
+- 需求：选择运营商后，即可选择该运营商的套餐名称（家庭融合/E家融合/单卡）。
+- 实现：正式客户与异网用户两个表单的「套餐名称」在原有 datalist（随运营商过滤）基础上，新增**运营商套餐标签区**——选择运营商后直接展示该运营商全部套餐（含类别与月费提示），点击标签即填入套餐名称；仍可自行输入新套餐名（写入套餐业务库后后续可选）。
+- 涉及文件：`frontend/src/App.jsx`（FormModal / PortinFormModal 两处）。
+
+**2026-10-03 · 联系电话 11 字符限制**
+
+- 需求：联系电话输入最多限制 11 字符（手机号码）。
+- 实现：正式客户与异网用户表单的「联系电话 *」输入框增加 `maxLength={11}`，超长输入自动截断；不影响运营商自动识别。
+- 涉及文件：`frontend/src/App.jsx`（两处 phone input）。
+
+**构建与发布**
+
+- 重新构建：`npm install && export PATH="$PWD/tools:$PATH" && node scripts/build-combined.js`
+- 新前端 bundle：`index-DgR8XVQV.js`；新安装包 `custdb.fpk`（md5 a83db5d844e9…，5.38MB）
+- 已同步 GitHub 仓库 `cp4857971/custdb-crm`（main 分支）：App.jsx 源码、两侧 public 前端产物、新版 fpk、CHANGELOG.md；旧版 JS bundle 已清理，git clone 终验通过。
