@@ -1,0 +1,31 @@
+# ============================================================
+# 通信客户资料库 · docker compose 一键部署
+# 用法：
+#   1) 先构建镜像：docker build -t custdb:0.0.21 ./backend
+#   2) 本文件与 backend/ 同级（项目根）时：
+#      docker compose up -d
+#   3) 浏览器访问：http://NAS或服务器IP:5001/app/custdb
+#      默认超级管理员 admin / admin（登录后请立即修改）
+# ============================================================
+services:
+  custdb:
+    image: custdb:0.0.21          # 使用已构建镜像；若想现场构建，改用下方 build 块并注释本行
+    # build:
+    #   context: ./backend
+    container_name: custdb
+    restart: unless-stopped
+    ports:
+      - "5001:5001"               # 左侧=宿主端口（可改，如 "8001:5001"）；右侧=容器内固定 5001
+    environment:
+      PORT: "5001"
+      GATEWAY_PREFIX: /app/custdb # 访问路径前缀，保持默认即可
+      DATA_DIR: /data             # 容器内数据目录（勿改）
+      # TZ: Asia/Shanghai         # 需要时取消注释
+    volumes:
+      - ./custdb-data:/data       # 客户数据持久化目录；可改为 /vol1/存储空间1/custdb-data 等
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5001/app/custdb/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
