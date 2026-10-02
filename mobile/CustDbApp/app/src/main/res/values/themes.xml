@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 无 ActionBar 的主题（纯 WebView 全屏应用，framework 自带，无第三方依赖） -->
+    <style name="Theme.CustDb" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#17365D</item>
+        <item name="android:windowBackground">#F2F5F9</item>
+        <item name="android:colorPrimary">#17365D</item>
+        <item name="android:colorAccent">#2E75B6</item>
+    </style>
+</resources>
