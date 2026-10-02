@@ -1,0 +1,14 @@
+{
+  ".url": {
+    "custdb.main": {
+      "title": "通信客户资料库",
+      "icon": "images/icon_{0}.png",
+      "type": "iframe",
+      "protocol": "",
+      "gatewayPrefix": "/app/custdb",
+      "gatewaySocket": "app.sock",
+      "url": "/app/custdb",
+      "allUsers": true
+    }
+  }
+}
