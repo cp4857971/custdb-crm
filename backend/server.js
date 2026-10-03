@@ -611,3 +611,160 @@ function isTempUser(req) {
 }
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// ---------------- 数据导入（支持 CSV / Excel / JSON / TXT 等） ----------------
+
+// 表头别名 → 字段映射（导入时按表头识别列）
+const FIELD_ALIASES = {
+  name: ["姓名", "客户姓名", "客户", "name"],
+  phone: ["联系电话", "电话", "手机", "手机号", "手机号码", "联系方式", "phone", "tel", "mobile"],
+  idAddress: ["身份证住址", "证件住址", "证件地址", "身份证地址", "idaddress", "id address"],
+  installAddress: ["装机地址", "安装地址", "装维地址", "installaddress", "install address"],
+  planName: ["套餐名称", "套餐", "planname", "plan"],
+  planFee: ["套餐费用", "套餐费", "月费", "资费", "费用", "planfee", "fee"],
+  addonServices: ["小业务", "增值业务", "附加业务", "小业务名称", "addon", "services"],
+  operator: ["运营商", "所属运营商", "现用运营商", "移动/联通/电信", "operator"],
+  remark: ["备注", "备注信息", "备注说明", "remark", "note"],
+  discount: ["折扣", "优惠", "折扣优惠", "discount", "off"],
+  contractStart: ["协议开始日期", "开始日期", "协议开始", "生效日期", "contractstart", "start date"],
+  contractEnd: ["协议到期日期", "到期日期", "协议到期", "到期日", "到期时间", "contractend", "end date"]
+};
+const CANONICAL_ORDER = ["name", "phone", "idAddress", "installAddress", "planName", "planFee", "addonServices", "operator", "remark", "discount", "contractStart", "contractEnd"];
+
+function normHeader(h) {
+  return String(h || "").trim().toLowerCase().replace(/[\s_\-（）()]/g, "");
+}
+
+function fieldByHeader(h) {
+  const key = normHeader(h);
+  for (const field of CANONICAL_ORDER) {
+    if (FIELD_ALIASES[field].some((a) => normHeader(a) === key)) return field;
+  }
+  return null;
+}
+
+// Excel 日期序列号（1900 系统）→ Date
+function excelSerialToDate(n) {
+  return new Date(Math.round((Number(n) - 25569) * 86400000));
+}
+
+// 归一化日期 → YYYY-MM-DD；无法识别返回 null
+function normalizeDate(v) {
+  if (v == null || v === "") return "";
+  if (v instanceof Date && !isNaN(v.getTime())) {
+    return v.getFullYear() + "-" + String(v.getMonth() + 1).padStart(2, "0") + "-" + String(v.getDate()).padStart(2, "0");
+  }
+  const s = String(v).trim();
+  if (DATE_RE.test(s)) return s;
+  let m = s.match(/^(\d{4})[年\-/.](\d{1,2})[月\-/.](\d{1,2})日?$/);
+  if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+  m = s.match(/^(\d{1,2})[月\-/.](\d{1,2})[日\-/.](\d{4})$/);
+  if (m) return m[3] + "-" + m[1].padStart(2, "0") + "-" + m[2].padStart(2, "0");
+  if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 20000 && Number(s) < 60000) {
+    const d = excelSerialToDate(Number(s));
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  return "";
+}
+
+// 数值归一化：套餐费用
+function normalizeFee(v) {
+  if (v == null || v === "") return null;
+  if (typeof v === "number") return isNaN(v) ? null : v;
+  const s = String(v).trim().replace(/[^\d.]/g, "");
+  if (!s) return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+}
+
+// 单元格 → 文本
+function cellText(v) {
+  if (v == null) return "";
+  if (v instanceof Date) return normalizeDate(v);
+  return String(v).trim();
+}
+
+// 识别文本分隔符（逗号 / 全角逗号 / Tab / 分号 / 竖线）
+function detectDelimiter(line) {
+  const cands = [",", "\t", "，", ";", "|"];
+  let best = null, bestCount = -1;
+  for (const c of cands) {
+    const n = (line.split(c).length - 1);
+    if (n > bestCount) { bestCount = n; best = c; }
+  }
+  return bestCount > 0 ? best : null;
+}
+
+// 解析带引号的 CSV 行（支持双引号包裹、引号内分隔符、双引号转义）
+function splitLine(line, delim) {
+  const out = [];
+  let cur = "", inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQ) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = false;
+      } else cur += ch;
+    } else if (ch === '"') {
+      inQ = true;
+    } else if (ch === delim) {
+      out.push(cur); cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  out.push(cur);
+  return out.map((s) => s.trim());
+}
+
+// 文本 → 二维数组
+function parseTextTable(text) {
+  const lines = String(text).replace(/\r\n?/g, "\n").split("\n").map((l) => l.trim()).filter((l) => l !== "");
+  if (!lines.length) return [];
+  const delim = detectDelimiter(lines[0]);
+  if (!delim) return []; // 无法识别分隔符，视为无有效表格
+  return lines.map((l) => splitLine(l, delim));
+}
+
+// 行 → 客户记录（返回 { rec, fatal, warn }）：cells 为数组、mapping 为列→字段映射
+function rowToRecord(cells, mapping) {
+  const raw = {};
+  if (mapping && mapping.length) {
+    mapping.forEach((field, idx) => { raw[field] = cells[idx]; });
+  } else {
+    CANONICAL_ORDER.forEach((f, i) => { raw[f] = cells[i]; });
+  }
+  return rowToRecordFromRaw(raw);
+}
+
+// 原始字段对象 → 客户记录
+function rowToRecordFromRaw(raw) {
+  const name = cellText(raw.name);
+  const phone = cellText(raw.phone);
+  if (!name || !phone) return { fatal: "姓名或联系电话为空" };
+  const warns = [];
+  const contractStart = normalizeDate(raw.contractStart);
+  if (raw.contractStart != null && String(raw.contractStart).trim() !== "" && !contractStart) warns.push("开始日期未识别");
+  const contractEnd = normalizeDate(raw.contractEnd);
+  if (raw.contractEnd != null && String(raw.contractEnd).trim() !== "" && !contractEnd) warns.push("到期日期未识别");
+  return {
+    rec: {
+      id: "KH-" + Date.now().toString().slice(-8) + crypto.randomBytes(2).toString("hex").toUpperCase(),
+      name,
+      phone,
+      idAddress: cellText(raw.idAddress),
+      installAddress: cellText(raw.installAddress),
+      planName: cellText(raw.planName),
+      planFee: normalizeFee(raw.planFee),
+      addonServices: cellText(raw.addonServices),
+      operator: cellText(raw.operator),
+      remark: cellText(raw.remark),
+      discount: cellText(raw.discount),
+      contractStart,
+      contractEnd,
+      createdAt: new Date().toISOString()
+    },
+    warns
+  };
+}
