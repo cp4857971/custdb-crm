@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#17365D" />
+<title>授权导出中心 · 通信客户资料库</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: #f2f4f7; color: #1f2937; }
+  .topbar { background: #17365D; color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .topbar h1 { font-size: 17px; font-weight: 600; }
+  .topbar .sub { font-size: 12px; opacity: .75; margin-top: 2px; }
+  .topbar .ops { display: flex; align-items: center; gap: 10px; }
+  .topbar a, .topbar button { color: #fff; text-decoration: none; font-size: 13px; background: rgba(255,255,255,.14); border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .topbar a:hover, .topbar button:hover { background: rgba(255,255,255,.26); }
+  .topbar .who { font-size: 12px; opacity: .9; }
+  .wrap { max-width: 960px; margin: 16px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+  .card-hd { padding: 12px 16px; border-bottom: 1px solid #eef1f5; font-size: 14px; font-weight: 600; }
+  .card-bd { padding: 16px; }
+  .f-label { font-size: 13px; color: #4b5563; display: block; margin: 10px 0 4px; }
+  input, select { border: 1px solid #d4dae2; border-radius: 6px; padding: 7px 10px; font-size: 13px; background: #fff; color: #1f2937; width: 100%; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  .btn { border: 1px solid #d4dae2; background: #fff; border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer; color: #1f2937; }
+  .btn:hover { border-color: #17365D; color: #17365D; }
+  .btn-pri { background: #17365D; border-color: #17365D; color: #fff; }
+  .btn-pri:hover { opacity: .9; color: #fff; }
+  .btn-danger { color: #c0392b; border-color: #e0b4ae; }
+  .btn-danger:hover { background: #fdf0ee; border-color: #c0392b; }
+  .btn-sm { padding: 3px 8px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f7f9fb; color: #4b5563; text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1f5; white-space: nowrap; font-weight: 600; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f3f6; }
+  tr:hover td { background: #f8fafc; }
+  .code-chip { font-family: "SFMono-Regular", Consolas, monospace; font-weight: 700; color: #17365D; letter-spacing: 1px; }
+  .muted { color: #9aa4b2; }
+  .notice { background: #eef5fb; border: 1px solid #cfe0f0; color: #17365D; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+  .notice.warn { background: #fdf3ef; border-color: #ecd3cb; color: #a9442f; }
+  .empty { text-align: center; color: #9aa4b2; padding: 24px 0; }
+  .toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #17365D; color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; z-index: 99; box-shadow: 0 2px 8px rgba(0,0,0,.25); display: none; max-width: 90vw; }
+  .toast.err { background: #c0392b; }
+  .login-card { max-width: 380px; margin: 80px auto; }
+  .login-card form { padding: 8px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .login-card label { font-size: 13px; color: #4b5563; }
+  .login-card .err { color: #c0392b; font-size: 13px; min-height: 18px; }
+  .login-hint { padding: 12px 16px 4px; color: #9aa4b2; font-size: 12px; }
+  .foot { text-align: center; color: #9aa4b2; font-size: 12px; padding: 12px 0 24px; }
+  @media print { .topbar, .foot, .toast, .btn, .ops { display: none !important; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>授权导出中心 · 通信客户资料库</h1>
+    <div class="sub" id="topbar-sub">临时用户导出数据需管理员授权码；管理员可在此生成/管理授权码</div>
+  </div>
+  <div class="ops">
+    <span class="who" id="who"></span>
+    <a href="./" target="_blank">返回应用</a>
+    <button onclick="logout()">退出登录</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="wrap" id="view-root"></div>
+<div class="foot">授权码单次有效，过期自动作废</div>
+
+<script>
+(function () {
+  "use strict";
+  var base = (location.pathname.replace(/\/export-center\.html$/, "") || "/app/custdb").replace(/\/+$/, "");
+  var tokenKey = "custdb_token";
+
+  function toast(msg, isErr) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast" + (isErr ? " err" : "");
+    t.style.display = "block";
+    clearTimeout(t._tm);
+    t._tm = setTimeout(function () { t.style.display = "none"; }, 4000);
+  }
+
+  function api(path, opts) {
+    var headers = { "Content-Type": "application/json" };
+    var token = localStorage.getItem(tokenKey);
+    if (token) headers.Authorization = "Bearer " + token;
+    var o = opts || {};
+    o.headers = Object.assign({}, headers, o.headers || {});
+    return fetch(base + "/api" + path, o).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        j._status = r.status;
+        return j;
+      });
+    });
+  }
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function logout() {
+    localStorage.removeItem(tokenKey);
+    localStorage.removeItem("custdb_user");
+    localStorage.removeItem("custdb_uid");
+    localStorage.removeItem("custdb_isSuper");
+    localStorage.removeItem("custdb_isOperator");
+    location.reload();
+  }
+
+  var me = null;
+
+  function renderLogin() {
+    var root = document.getElementById("view-root");
+    root.innerHTML =
+      '<div class="card login-card"><div class="card-hd">登录</div>' +
+      '<div class="login-hint">请使用您的账号登录（管理员 / 正式用户 / 临时用户均可）。</div>' +
+      '<form id="login-form">' +
+      '<label>用户名</label><input id="login-user" autocomplete="username" />' +
+      '<label>密码</label><input id="login-pass" type="password" autocomplete="current-password" />' +
+      '<div class="err" id="login-err"></div>' +
+      '<button type="submit" class="btn btn-pri">登录</button></form></div>';
+    document.getElementById("login-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var u = document.getElementById("login-user").value.trim();
+      var p = document.getElementById("login-pass").value;
+      var errEl = document.getElementById("login-err");
+      if (!u || !p) { errEl.textContent = "请输入用户名与密码"; return; }
+      api("/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) }).then(function (j) {
+        if (!j.ok) { errEl.textContent = j.error || "登录失败"; return; }
+        localStorage.setItem(tokenKey, j.token);
+        localStorage.setItem("custdb_user", j.username || "");
+        localStorage.setItem("custdb_uid", j.uid || j.username || "");
+        localStorage.setItem("custdb_isSuper", j.isSuper ? "1" : "0");
+        if (j.isOperator) localStorage.setItem("custdb_isOperator", "1"); else localStorage.removeItem("custdb_isOperator");
+        toast("登录成功");
+        init();
+      });
+    });
+  }
+
+  function init() {
+    api("/auth/me").then(function (j) {
+      if (j._status === 401 || !j.loggedIn) { renderLogin(); return; }
+      me = j;
+      var role = j.isSuper ? "超级管理员" : (j.isTemp ? "临时用户" : (j.isOperator ? "操作员" : (j.isUser ? "正式用户" : "NAS 用户")));
+      document.getElementById("who").textContent = "当前身份：" + (j.username || j.uid || "") + "（" + role + "）";
+      render();
+    });
+  }
+
+  function render() {
+    var root = document.getElementById("view-root");
+    var isTemp = me.isTemp;
+    var canAdmin = me.isSuper || (!me.isOperator && me.isAdmin);
+    var html = "";
+
+    if (canAdmin) {
+      html +=
+        '<div class="card"><div class="card-hd">生成导出授权码（管理员）</div><div class="card-bd">' +
+        '<div class="row">' +
+        '<div><label class="f-label">有效期（分钟，5-1440，默认 30）</label><input id="gen-minutes" type="number" min="5" max="1440" value="30" /></div>' +
+        '<div><label class="f-label">备注（可选，如：给谁的）</label><input id="gen-note" maxlength="50" placeholder="如：张临时用户 导出用" /></div>' +
+        '<div style="flex:0 0 auto; display:flex; align-items:flex-end;"><button class="btn btn-pri" onclick="genCode()">生成授权码</button></div>' +
+        '</div></div></div>' +
+        '<div class="card"><div class="card-hd">有效授权码列表</div><div class="card-bd" id="code-list"><div class="empty">加载中…</div></div></div>';
+    } else {
+      html += '<div class="notice">' + (isTemp
+        ? "您是<strong>临时用户</strong>：可导入完整数据、可查看（敏感字段已脱敏），<strong>不能删除数据</strong>。导出数据需要管理员生成的授权码（单次有效）。"
+        : "您可以直接导出数据；如需要更完整的导出权限，请联系管理员。") + "</div>";
+    }
+
+    html +=
+      '<div class="card"><div class="card-hd">导出数据</div><div class="card-bd">' +
+      '<div class="row">' +
+      '<div><label class="f-label">数据类型</label><select id="exp-type">' +
+      '<option value="customers">客户资料</option><option value="portin">异网用户</option></select></div>' +
+      '<div><label class="f-label">文件格式</label><select id="exp-format">' +
+      '<option value="csv">CSV（Excel/WPS 可直接打开）</option><option value="xlsx">Excel（.xlsx）</option><option value="json">JSON（可回导备份）</option></select></div>' +
+      (isTemp
+        ? '<div style="flex:1.4"><label class="f-label">管理员授权码（必填）</label><input id="exp-code" placeholder="请输入管理员提供的授权码" /></div>'
+        : "") +
+      '</div>' +
+      '<div style="margin-top:14px;"><button class="btn btn-pri" onclick="doExport()">导出下载</button> <span class="muted" id="exp-msg"></span></div>' +
+      '</div></div>';
+
+    root.innerHTML = html;
+    if (canAdmin) loadCodes();
+  }
+
+  function loadCodes() {
+    api("/admin/export-codes").then(function (j) {
+      var el = document.getElementById("code-list");
+      if (!el) return;
+      var codes = (j && j.codes) || [];
+      if (!codes.length) { el.innerHTML = '<div class="empty">暂无有效授权码</div>'; return; }
+      el.innerHTML = '<table><thead><tr><th>授权码</th><th>备注</th><th>有效期至</th><th>生成人</th><th>操作</th></tr></thead><tbody>' +
+        codes.map(function (c) {
+          return "<tr><td class=\"code-chip\">" + esc(c.code) + "</td><td>" + esc(c.note || "—") + "</td><td>" +
+            esc(new Date(c.expireAt).toLocaleString("zh-CN")) + "</td><td>" + esc(c.createdBy || "—") + "</td><td>" +
+            '<button class="btn btn-danger btn-sm" onclick="revokeCode(\'' + esc(c.code) + "')">作废</button></td></tr>";
+        }).join("") + "</tbody></table>";
+    });
+  }
+
+  window.genCode = function () {
+    var minutes = parseInt(document.getElementById("gen-minutes").value, 10);
+    if (!(minutes >= 5 && minutes <= 1440)) { toast("有效期须为 5-1440 分钟", true); return; }
+    var note = document.getElementById("gen-note").value;
+    api("/admin/export-codes", { method: "POST", body: JSON.stringify({ minutes: minutes, note: note }) }).then(function (j) {
+      if (j && j.ok) {
+        toast("已生成授权码：" + j.code + "（" + j.minutes + " 分钟有效，单次使用）");
+        document.getElementById("gen-note").value = "";
+        loadCodes();
+      } else toast(j && j.error ? j.error : "生成失败", true);
+    });
+  };
+
+  window.revokeCode = function (code) {
+    if (!confirm("确认作废授权码 " + code + "？作废后立即失效。")) return;
+    api("/admin/export-codes/" + encodeURIComponent(code), { method: "DELETE" }).then(function (j) {
+      if (j && j.ok) { toast("已作废：" + j.revoked); loadCodes(); }
+      else toast(j && j.error ? j.error : "作废失败", true);
+    });
+  };
+
+  window.doExport = function () {
+    var type = document.getElementById("exp-type").value;
+    var format = document.getElementById("exp-format").value;
+    var code = "";
+    if (me.isTemp) {
+      code = (document.getElementById("exp-code").value || "").trim();
+      if (!code) { toast("请填写管理员提供的授权码", true); return; }
+    }
+    var msg = document.getElementById("exp-msg");
+    msg.textContent = "正在导出…";
+    var url = base + "/api/export?format=" + encodeURIComponent(format) + "&type=" + encodeURIComponent(type);
+    if (code) url += "&code=" + encodeURIComponent(code);
+    var headers = {};
+    var token = localStorage.getItem(tokenKey);
+    if (token) headers.Authorization = "Bearer " + token;
+    fetch(url, { method: "GET", headers: headers }).then(function (r) {
+      return r.json().catch(function () { return null; }).then(function (j) {
+        if (!r.ok) {
+          msg.textContent = "";
+          toast((j && j.error) || "导出失败（HTTP " + r.status + "）", true);
+          return null;
+        }
+        return r.blob().then(function (b) { return { blob: b, j: j }; });
+      });
+    }).then(function (res) {
+      if (!res) return;
+      msg.textContent = "";
+      var ext = format === "xlsx" ? "xlsx" : format;
+      var stamp = new Date().toISOString().slice(0, 16).replace(/[-T:]/g, "");
+      var name = (type === "portin" ? "异网用户-" : "客户资料-") + stamp + "." + ext;
+      var n = URL.createObjectURL(res.blob);
+      var a = document.createElement("a");
+      a.href = n; a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(n); }, 5000);
+      toast("导出成功");
+    });
+  };
+
+  if (localStorage.getItem(tokenKey)) init(); else renderLogin();
+})();
+</script>
+</body>
+</html>

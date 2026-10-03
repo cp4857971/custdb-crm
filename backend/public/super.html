@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#17365D" />
+<title>超级管理员控制台 · 通信客户资料库</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif; background: #f2f4f7; color: #1f2937; }
+  .topbar { background: #17365D; color: #fff; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .topbar h1 { font-size: 17px; font-weight: 600; }
+  .topbar .sub { font-size: 12px; opacity: .75; margin-top: 2px; }
+  .topbar .ops { display: flex; align-items: center; gap: 10px; }
+  .topbar a, .topbar button { color: #fff; text-decoration: none; font-size: 13px; background: rgba(255,255,255,.14); border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .topbar a:hover, .topbar button:hover { background: rgba(255,255,255,.26); }
+  .topbar .who { font-size: 12px; opacity: .9; }
+  .wrap { max-width: 1280px; margin: 16px auto; padding: 0 16px; }
+  .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08); margin-bottom: 16px; }
+  .card-hd { padding: 12px 16px; border-bottom: 1px solid #eef1f5; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { padding: 7px 14px; border-radius: 6px; border: none; background: transparent; color: #4b5563; cursor: pointer; font-size: 13px; }
+  .tab:hover { background: #eef2f7; }
+  .tab.on { background: #17365D; color: #fff; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; }
+  .filters input, .filters select { border: 1px solid #d4dae2; border-radius: 6px; padding: 6px 10px; font-size: 13px; background: #fff; color: #1f2937; }
+  .filters input { min-width: 180px; }
+  .btn { border: 1px solid #d4dae2; background: #fff; border-radius: 6px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #1f2937; }
+  .btn:hover { border-color: #17365D; color: #17365D; }
+  .btn-pri { background: #17365D; border-color: #17365D; color: #fff; }
+  .btn-pri:hover { opacity: .9; color: #fff; }
+  .btn-danger { color: #c0392b; border-color: #e0b4ae; }
+  .btn-danger:hover { background: #fdf0ee; border-color: #c0392b; }
+  .btn-sm { padding: 3px 8px; font-size: 12px; }
+  .table-wrap { overflow-x: auto; padding: 0 16px 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f7f9fb; color: #4b5563; text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef1f5; white-space: nowrap; font-weight: 600; }
+  td { padding: 8px 10px; border-bottom: 1px solid #f1f3f6; vertical-align: top; }
+  tr:hover td { background: #f8fafc; }
+  .muted { color: #9aa4b2; }
+  .warn { color: #c0392b; }
+  .ok { color: #1e7d34; }
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: 11px; background: #eef2f7; color: #4b5563; }
+  .badge-b { background: #e3edf7; color: #17365D; }
+  .badge-r { background: #fbe9e7; color: #c0392b; }
+  .badge-g { background: #e8f5e9; color: #1e7d34; }
+  .empty { text-align: center; color: #9aa4b2; padding: 40px 0; }
+  .foot { text-align: center; color: #9aa4b2; font-size: 12px; padding: 12px 0 24px; }
+  .toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #17365D; color: #fff; padding: 9px 18px; border-radius: 6px; font-size: 13px; z-index: 99; box-shadow: 0 2px 8px rgba(0,0,0,.25); display: none; max-width: 90vw; }
+  .toast.err { background: #c0392b; }
+  .login-card { max-width: 380px; margin: 80px auto; }
+  .login-card .card-hd { border-bottom: none; }
+  .login-card form { padding: 8px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .login-card label { font-size: 13px; color: #4b5563; }
+  .login-card input { border: 1px solid #d4dae2; border-radius: 6px; padding: 8px 10px; font-size: 14px; }
+  .login-card .err { color: #c0392b; font-size: 13px; min-height: 18px; }
+  .login-hint { padding: 12px 16px 4px; color: #9aa4b2; font-size: 12px; }
+  @media print {
+    .topbar, .filters, .card-hd .ops, .tabs, .foot, .toast { display: none !important; }
+    .card { box-shadow: none; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>管理控制台 · 通信客户资料库</h1>
+    <div class="sub" id="topbar-sub">管理员：全库数据查看 / 按创建人筛选 / 打印 / 删除自建数据；超级管理员：另含回收站恢复</div>
+  </div>
+  <div class="ops">
+    <span class="who" id="who"></span>
+    <a href="./" target="_blank">返回应用</a>
+    <button onclick="printPage()">打印</button>
+    <button onclick="logout()">退出登录</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="wrap" id="view-root"></div>
+
+<script>
+(function () {
+  "use strict";
+  var base = (location.pathname.replace(/\/super\.html$/, "") || "/app/custdb").replace(/\/+$/, "");
+  var tokenKey = "custdb_token";
+  var userKey = "custdb_user";
+  var superKey = "custdb_isSuper";
+
+  function toast(msg, isErr) {
+    var t = document.getElementById("toast");
+    t.textContent = msg;
+    t.className = "toast" + (isErr ? " err" : "");
+    t.style.display = "block";
+    clearTimeout(t._tm);
+    t._tm = setTimeout(function () { t.style.display = "none"; }, 3200);
+  }
+
+  function api(path, opts) {
+    var headers = { "Content-Type": "application/json" };
+    var token = localStorage.getItem(tokenKey);
+    if (token) headers.Authorization = "Bearer " + token;
+    var o = opts || {};
+    o.headers = Object.assign({}, headers, o.headers || {});
+    return fetch(base + "/api" + path, o).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        j._status = r.status;
+        return j;
+      });
+    });
+  }
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function creatorLabel(c) {
+    var v = c && c.createdBy ? c.createdBy : "";
+    if (!v) return '<span class="muted">历史数据</span>';
+    if (v === "system") return '<span class="badge badge-b">系统示例</span>';
+    return '<span class="badge">' + esc(v) + "</span>";
+  }
+
+  function ownerLabel(u) {
+    return u ? '<span class="badge badge-g">' + esc(u) + "</span>" : '<span class="muted">—</span>';
+  }
+
+  function statusBadge(s) {
+    var cls = s === "已到期" ? "badge-r" : (s === "正常" ? "badge-g" : "badge");
+    return '<span class="' + cls + '">' + esc(s || "未设置") + "</span>";
+  }
+
+  function printPage() { window.print(); }
+
+  function logout() {
+    localStorage.removeItem(tokenKey);
+    localStorage.removeItem(userKey);
+    localStorage.removeItem(superKey);
+    localStorage.removeItem("custdb_uid");
+    localStorage.removeItem("custdb_isOperator");
+    location.reload();
+  }
+
+  var state = { tab: "customers", q: "", creator: "", owner: "", type: "all", facets: { creators: [], owners: [] } };
+  var me = { isSuper: false, isAdmin: false, isOperator: false, username: "" };
+
+  function renderLogin() {
+    var root = document.getElementById("view-root");
+    root.innerHTML =
+      '<div class="card login-card">' +
+      '<div class="card-hd">管理员登录</div>' +
+      '<div class="login-hint">仅管理员或超级管理员账号可进入管理控制台：查看全部数据、按创建人筛选、打印、删除自建数据；超级管理员还可恢复回收站数据。</div>' +
+      '<form id="login-form">' +
+      '<label>用户名</label><input id="login-user" autocomplete="username" placeholder="admin" />' +
+      '<label>密码</label><input id="login-pass" type="password" autocomplete="current-password" placeholder="请输入密码" />' +
+      '<div class="err" id="login-err"></div>' +
+      '<button type="submit" class="btn btn-pri">登录</button>' +
+      "</form></div>";
+    document.getElementById("login-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var u = document.getElementById("login-user").value.trim();
+      var p = document.getElementById("login-pass").value;
+      var errEl = document.getElementById("login-err");
+      errEl.textContent = "";
+      if (!u || !p) { errEl.textContent = "请输入用户名与密码"; return; }
+      api("/auth/login", { method: "POST", body: JSON.stringify({ username: u, password: p }) }).then(function (j) {
+        if (!j.ok) { errEl.textContent = j.error || "登录失败"; return; }
+        if (!j.isSuper && !(j.isUser && !j.isOperator)) { errEl.textContent = "该账号不是管理员，无权限进入控制台"; return; }
+        localStorage.setItem(tokenKey, j.token);
+        localStorage.setItem(userKey, j.username || "");
+        localStorage.setItem(superKey, j.isSuper ? "1" : "0");
+        toast("登录成功");
+        init();
+      });
+    });
+  }
+
+  function init() {
+    // 用 /admin/status 判定角色（管理员 / 超级管理员）
+    api("/admin/status").then(function (j) {
+      if (j._status === 401) { renderLogin(); return; }
+      if (!j.isAdmin && !j.isSuper) {
+        document.getElementById("who").textContent = "当前身份：" + (j.username || "") + "（非管理员，无权限）";
+        renderLogin();
+        return;
+      }
+      me.isSuper = !!j.isSuper;
+      me.isAdmin = !!j.isAdmin;
+      me.isOperator = !!j.isOperator;
+      me.username = j.username || "";
+      var role = j.isSuper ? "超级管理员" : "管理员";
+      document.getElementById("who").textContent = "当前身份：" + (j.username || "") + "（" + role + "）";
+      document.getElementById("topbar-sub").textContent = j.isSuper
+        ? "全库数据 / 按创建人筛选 / 打印 / 回收站恢复"
+        : "全库数据 / 按创建人筛选 / 打印 / 删除自建数据";
+      loadFacets();
+      render();
+    });
+  }
+
+  function loadFacets() {
+    api(me.isSuper ? "/super/facets" : "/admin/all-facets").then(function (j) {
+      if (j && j.creators) state.facets = { creators: j.creators || [], owners: j.owners || [] };
+      render();
+    });
+  }
+
+  function render() {
+    if (!me.isSuper && state.tab === "deleted") state.tab = "customers";
+    if (state.tab === "customers") renderCustomers();
+    else if (state.tab === "portin") renderPortin();
+    else renderDeleted();
+  }
+
+  function filterBar(extra) {
+    var crOpts = '<option value="">全部创建人</option>' + state.facets.creators.map(function (c) {
+      return '<option value="' + esc(c) + '"' + (state.creator === c ? " selected" : "") + ">" + esc(c) + "</option>";
+    }).join("");
+    var owOpts = '<option value="">全部归属用户</option>' + state.facets.owners.map(function (c) {
+      return '<option value="' + esc(c) + '"' + (state.owner === c ? " selected" : "") + ">" + esc(c) + "</option>";
+    }).join("");
+    return (
+      '<div class="filters">' +
+      '<input id="f-q" placeholder="搜索姓名 / 电话 / 地址 / 套餐…" value="' + esc(state.q) + '" oninput="debouncedGo()" />' +
+      '<select id="f-creator" onchange="setCreator(this.value)">' + crOpts + "</select>" +
+      '<select id="f-owner" onchange="setOwner(this.value)">' + owOpts + "</select>" +
+      (extra || "") +
+      '<span class="muted" id="f-count"></span>' +
+      "</div>"
+    );
+  }
+
+  function go() {
+    state.q = document.getElementById("f-q") ? document.getElementById("f-q").value : state.q;
+    render();
+  }
+
+  window.debouncedGo = (function () {
+    var tm = null;
+    return function () { clearTimeout(tm); tm = setTimeout(go, 350); };
+  })();
+
+  window.setCreator = function (v) { state.creator = v; render(); };
+  window.setOwner = function (v) { state.owner = v; render(); };
+  window.setType = function (v) { state.type = v; render(); };
+
+  function tabsHtml() {
+    var tabs = [["customers", "全部客户数据"], ["portin", "全部异网用户"]];
+    if (me.isSuper) tabs.push(["deleted", "回收站"]);
+    return '<div class="tabs">' + tabs.map(function (t) {
+      return '<button class="tab' + (state.tab === t[0] ? " on" : "") + '" data-tab="' + t[0] + '" onclick="setTab(\'' + t[0] + "')">" + t[1] + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function setTab(t) {
+    if (t === "deleted" && !me.isSuper) t = "customers";
+    state.tab = t;
+    document.querySelectorAll(".tab").forEach(function (b) { b.classList.toggle("on", b.dataset.tab === t); });
+    render();
+  }
+  window.setTab = setTab;
+
+  function renderCustomers() {
+    var root = document.getElementById("view-root");
+    var isOwn = function (c) { return me.isSuper || String(c.createdBy || "") === me.username; };
+    root.innerHTML =
+      '<div class="card">' +
+      '<div class="card-hd">' + tabsHtml() + '<div>' +
+      '<span class="muted">所有管理员 / 用户添加的客户数据，含创建人与归属用户' + (me.isSuper ? "" : "（仅可删除自己添加的数据）") + "</span></div></div>" +
+      filterBar() +
+      '<div class="table-wrap"><table><thead><tr>' +
+      "<th>创建人</th><th>归属用户</th><th>姓名</th><th>联系电话</th><th>运营商</th><th>套餐名称</th><th>月费(元)</th><th>小业务</th><th>协议到期</th><th>到期状态</th><th>剩余天数</th><th>备注</th>" + (me.isSuper ? "" : "<th>操作</th>") +
+      "</tr></thead><tbody id=\"tb\"><tr><td colspan=\"13\" class=\"empty\">加载中…</td></tr></tbody></table></div></div>";
+    var ep = me.isSuper ? "/super/customers" : "/admin/all-customers";
+    var params = "?q=" + encodeURIComponent(state.q) + "&creator=" + encodeURIComponent(state.creator) + "&user=" + encodeURIComponent(state.owner);
+    api(ep + params).then(function (j) {
+      var rows = (j && j.customers) || [];
+      document.getElementById("f-count").textContent = "共 " + rows.length + " 条";
+      var tb = document.getElementById("tb");
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="13" class="empty">暂无数据</td></tr>'; return; }
+      tb.innerHTML = rows.map(function (c) {
+        return "<tr><td>" + creatorLabel(c) + "</td><td>" + ownerLabel(c.user) + "</td><td>" + esc(c.name) + "</td><td>" + esc(c.phone) +
+          "</td><td>" + esc(c.operator) + "</td><td>" + esc(c.planName) + "</td><td>" + (c.planFee == null ? '<span class="muted">—</span>' : esc(c.planFee)) +
+          "</td><td>" + esc(c.addonServices) + "</td><td>" + esc(c.contractEnd) + "</td><td>" + statusBadge(c.status) +
+          "</td><td>" + (c.daysLeft == null ? '<span class="muted">—</span>' : esc(c.daysLeft)) + "</td><td>" + esc(c.remark) + "</td>" +
+          (me.isSuper ? "" : "<td>" + (isOwn(c)
+            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'customers\',\'' + esc(c.id) + "')">删除</button>"
+            : '<span class="muted" title="仅可删除自己添加的数据">他人数据</span>') + "</td>") +
+          "</tr>";
+      }).join("");
+    });
+  }
+
+  function renderPortin() {
+    var root = document.getElementById("view-root");
+    var isOwn = function (c) { return me.isSuper || String(c.createdBy || "") === me.username; };
+    root.innerHTML =
+      '<div class="card">' +
+      '<div class="card-hd">' + tabsHtml() + '<div>' +
+      '<span class="muted">所有管理员 / 用户添加的异网用户（策反名单）' + (me.isSuper ? "" : "（仅可删除自己添加的数据）") + "</span></div></div>" +
+      filterBar() +
+      '<div class="table-wrap"><table><thead><tr>' +
+      "<th>创建人</th><th>归属用户</th><th>联系电话</th><th>家庭住址</th><th>运营商</th><th>套餐名称</th><th>套餐费用(元)</th><th>更换决策人</th><th>备注</th>" + (me.isSuper ? "" : "<th>操作</th>") +
+      "</tr></thead><tbody id=\"tb\"><tr><td colspan=\"10\" class=\"empty\">加载中…</td></tr></tbody></table></div></div>";
+    var ep = me.isSuper ? "/super/portin" : "/admin/all-portin";
+    var params = "?q=" + encodeURIComponent(state.q) + "&creator=" + encodeURIComponent(state.creator) + "&user=" + encodeURIComponent(state.owner);
+    api(ep + params).then(function (j) {
+      var rows = (j && j.portin) || [];
+      document.getElementById("f-count").textContent = "共 " + rows.length + " 条";
+      var tb = document.getElementById("tb");
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="10" class="empty">暂无数据</td></tr>'; return; }
+      tb.innerHTML = rows.map(function (c) {
+        return "<tr><td>" + creatorLabel(c) + "</td><td>" + ownerLabel(c.user) + "</td><td>" + esc(c.phone) +
+          "</td><td>" + esc(c.familyAddress) + "</td><td>" + esc(c.operator) + "</td><td>" + esc(c.planName) +
+          "</td><td>" + (c.planFee == null ? '<span class="muted">—</span>' : esc(c.planFee)) + "</td><td>" + esc(c.decider) + "</td><td>" + esc(c.remark) + "</td>" +
+          (me.isSuper ? "" : "<td>" + (isOwn(c)
+            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'portin\',\'' + esc(c.id) + "')">删除</button>"
+            : '<span class="muted" title="仅可删除自己添加的数据">他人数据</span>') + "</td>") +
+          "</tr>";
+      }).join("");
+    });
+  }
+
+  function renderDeleted() {
+    var root = document.getElementById("view-root");
+    root.innerHTML =
+      '<div class="card">' +
+      '<div class="card-hd">' + tabsHtml() + '<div><span class="muted">管理员 / 用户删除的数据在此，可恢复或彻底删除</span></div></div>' +
+      '<div class="filters">' +
+      '<input id="f-q" placeholder="搜索姓名 / 电话 / 删除人 / 创建人…" value="' + esc(state.q) + '" oninput="debouncedGo()" />' +
+      '<select id="f-type" onchange="setType(this.value)">' +
+      '<option value="all"' + (state.type === "all" ? " selected" : "") + ">全部类型</option>" +
+      '<option value="customers"' + (state.type === "customers" ? " selected" : "") + ">客户数据</option>" +
+      '<option value="portin"' + (state.type === "portin" ? " selected" : "") + ">异网用户</option>" +
+      "</select>" +
+      '<span class="muted" id="f-count"></span></div>' +
+      '<div class="table-wrap"><table><thead><tr>' +
+      "<th>类型</th><th>创建人</th><th>归属用户</th><th>主要信息</th><th>删除时间</th><th>删除人</th><th>操作</th>" +
+      "</tr></thead><tbody id=\"tb\"><tr><td colspan=\"7\" class=\"empty\">加载中…</td></tr></tbody></table></div></div>";
+    api("/super/deleted?type=" + encodeURIComponent(state.type) + "&q=" + encodeURIComponent(state.q)).then(function (j) {
+      var rows = (j && j.deleted) || [];
+      document.getElementById("f-count").textContent = "共 " + rows.length + " 条";
+      var tb = document.getElementById("tb");
+      if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">回收站是空的</td></tr>'; return; }
+      tb.innerHTML = rows.map(function (c) {
+        var isC = c.type === "customers";
+        var main = isC
+          ? esc(c.name || "") + " · " + esc(c.phone) + (c.planName ? " · " + esc(c.planName) : "")
+          : esc(c.phone) + (c.familyAddress ? " · " + esc(c.familyAddress) : "");
+        var delAt = c.deletedAt ? new Date(c.deletedAt).toLocaleString("zh-CN") : "—";
+        return "<tr><td>" + (isC ? '<span class="badge badge-b">客户</span>' : '<span class="badge">异网用户</span>') +
+          "</td><td>" + creatorLabel(c) + "</td><td>" + ownerLabel(c.user) + "</td><td>" + esc(main) +
+          "</td><td>" + esc(delAt) + "</td><td>" + esc(c.deletedBy || "—") + "</td><td>" +
+          '<button class="btn btn-pri btn-sm" onclick="restore(\'' + esc(c.type) + "','" + esc(c.id) + "')">恢复</button> " +
+          '<button class="btn btn-danger btn-sm" onclick="purge(\'' + esc(c.type) + "','" + esc(c.id) + "')">彻底删除</button></td></tr>";
+      }).join("");
+    });
+  }
+
+  window.restore = function (type, id) {
+    if (!confirm("确认恢复这条已删除的数据？恢复后它将回到原归属用户的数据列表中。")) return;
+    api("/super/" + type + "/" + encodeURIComponent(id) + "/restore", { method: "POST", body: "{}" }).then(function (j) {
+      if (j && j.ok) { toast("已恢复：" + j.restored); render(); }
+      else toast(j && j.error ? j.error : "恢复失败", true);
+    });
+  };
+
+  window.purge = function (type, id) {
+    if (!confirm("彻底删除后不可恢复！确定要永久删除这条数据吗？")) return;
+    api("/super/" + type + "/" + encodeURIComponent(id) + "/purge", { method: "POST", body: "{}" }).then(function (j) {
+      if (j && j.ok) { toast("已彻底删除：" + j.purged); render(); }
+      else toast(j && j.error ? j.error : "删除失败", true);
+    });
+  };
+
+  // 管理员删除自建数据（软删除进回收站，超级管理员可恢复）
+  window.delOwn = function (type, id) {
+    if (!confirm("确认删除这条数据？删除后进入回收站，超级管理员可恢复。")) return;
+    api("/admin/all-" + type + "/" + encodeURIComponent(id), { method: "DELETE" }).then(function (j) {
+      if (j && j.deleted) { toast("已删除（进入回收站，超级管理员可恢复）"); render(); }
+      else toast(j && j.error ? j.error : "删除失败", true);
+    });
+  };
+
+  // 首次进入：已有超管 token 则直接进入控制台，否则显示登录
+  var token = localStorage.getItem(tokenKey);
+  if (token) {
+    init();
+  } else {
+    renderLogin();
+  }
+})();
+</script>
+</body>
+</html>

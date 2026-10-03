@@ -10,10 +10,86 @@
     <link rel="manifest" href="/app/custdb/manifest.json" />
     <link rel="apple-touch-icon" href="/app/custdb/icon-192.png" />
     <title>通信客户资料库</title>
-    <script type="module" crossorigin src="/app/custdb/assets/index-DgR8XVQV.js"></script>
-    <link rel="stylesheet" crossorigin href="/app/custdb/assets/index-6NtgLkUF.css">
+    <script type="module" crossorigin src="/app/custdb/assets/index-DIKYHF41.js"></script>
+    <link rel="stylesheet" crossorigin href="/app/custdb/assets/index-9_jZbM5B.css">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 入口注入（v0.0.25）：超级管理员「超级控制台」；管理员「管理控制台」；所有登录用户「授权导出」
+      (function () {
+        var base = (localStorage.getItem("custdb_base") || "/app/custdb").trim().replace(/\/+$/, "") || "/app/custdb";
+        var roleChecked = false;
+        var role = { isSuper: false, isAdmin: false };
+        function hasEntry(sel, attr) {
+          var els = document.querySelectorAll(sel);
+          for (var i = 0; i < els.length; i++) if (els[i].getAttribute(attr) === "1") return true;
+          return false;
+        }
+        function checkRole() {
+          if (roleChecked) return;
+          roleChecked = true;
+          var token = localStorage.getItem("custdb_token");
+          if (!token) return;
+          fetch(base + "/api/admin/status", { headers: { Authorization: "Bearer " + token } })
+            .then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (j) {
+              if (j && (j.isAdmin || j.isSuper)) { role.isAdmin = !!j.isAdmin; role.isSuper = !!j.isSuper; }
+              addEntries();
+            })
+            .catch(function () {});
+        }
+        function mkAnchor(text, href, attr) {
+          var a = document.createElement("a");
+          a.setAttribute(attr, "1");
+          a.href = href;
+          a.target = "_blank"; a.rel = "noopener";
+          a.className = "btn btn-ghost-dark head-desktop";
+          a.style.cssText = "text-decoration:none;color:inherit;";
+          a.textContent = text;
+          return a;
+        }
+        function mkDrawer(text, href, attr) {
+          var b = document.createElement("button");
+          b.setAttribute(attr, "1");
+          b.className = "drawer-item";
+          b.textContent = text;
+          b.onclick = function () { window.open(href, "_blank"); };
+          return b;
+        }
+        function addEntries() {
+          var loggedIn = !!localStorage.getItem("custdb_token");
+          var btns = document.querySelectorAll(".btn.btn-ghost-dark.head-desktop");
+          if (btns.length) {
+            var frag = document.createDocumentFragment();
+            if (loggedIn && !hasEntry(".btn.btn-ghost-dark.head-desktop[data-custdb-export]", "data-custdb-export"))
+              frag.appendChild(mkAnchor("授权导出", base + "/export-center.html", "data-custdb-export"));
+            if (role.isSuper && !hasEntry(".btn.btn-ghost-dark.head-desktop[data-custdb-console]", "data-custdb-console"))
+              frag.appendChild(mkAnchor("超级控制台", base + "/super.html", "data-custdb-console"));
+            else if (role.isAdmin && !hasEntry(".btn.btn-ghost-dark.head-desktop[data-custdb-console]", "data-custdb-console"))
+              frag.appendChild(mkAnchor("管理控制台", base + "/super.html", "data-custdb-console"));
+            if (frag.childNodes.length) btns[0].parentNode.insertBefore(frag, btns[0]);
+          }
+          var items = document.querySelectorAll(".drawer-item");
+          if (items.length) {
+            var dfrag = document.createDocumentFragment();
+            if (loggedIn && !hasEntry(".drawer-item[data-custdb-export]", "data-custdb-export"))
+              dfrag.appendChild(mkDrawer("授权导出", base + "/export-center.html", "data-custdb-export"));
+            if (role.isSuper && !hasEntry(".drawer-item[data-custdb-console]", "data-custdb-console"))
+              dfrag.appendChild(mkDrawer("超级控制台", base + "/super.html", "data-custdb-console"));
+            else if (role.isAdmin && !hasEntry(".drawer-item[data-custdb-console]", "data-custdb-console"))
+              dfrag.appendChild(mkDrawer("管理控制台", base + "/super.html", "data-custdb-console"));
+            if (dfrag.childNodes.length) items[items.length - 1].parentNode.appendChild(dfrag);
+          }
+        }
+        var tries = 0;
+        var tm = setInterval(function () {
+          tries++;
+          checkRole();
+          addEntries();
+          if (tries > 120) clearInterval(tm);
+        }, 300);
+      })();
+    </script>
   </body>
 </html>
