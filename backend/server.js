@@ -768,3 +768,1107 @@ function rowToRecordFromRaw(raw) {
     warns
   };
 }
+
+// ---------------- 认证：内置超级管理员 + 临时访问用户 + Token ----------------
+// config.json 字段：
+//   sessionSecret —— 令牌签名密钥（首次启动自动生成）
+//   superAdmin    —— { username, passwordHash, createdAt }（默认 admin / admin）
+//   tempUsers     —— 临时访问用户 [{ username, passwordHash, uid, expireAt, note, createdAt }]
+//   users         —— 正式登录用户（长期有效，管理员可增删改/停用）
+//                   [{ username, passwordHash, uid, note, disabled, createdAt }]
+// 登录（POST /api/auth/login）成功后签发 12 小时有效的 Bearer Token；
+// 请求携带 Authorization: Bearer <token> 时以该账号身份访问（超管 / 登录用户 / 临时用户），
+// 否则沿用网关注入的 X-Trim-Userid（NAS 用户）。
+function ensureAuthConfig() {
+  const c = readAppConfig();
+  let changed = false;
+  if (!c.sessionSecret || typeof c.sessionSecret !== "string" || c.sessionSecret.length < 16) {
+    c.sessionSecret = crypto.randomBytes(24).toString("hex");
+    changed = true;
+  }
+  if (!c.superAdmin || typeof c.superAdmin !== "object") {
+    c.superAdmin = { username: "admin", passwordHash: crypto.createHash("sha256").update("admin").digest("hex"), createdAt: new Date().toISOString() };
+    changed = true;
+  } else if (c.superAdmin.username === "admin" && c.superAdmin.passwordHash === crypto.createHash("sha256").update("cp4857971").digest("hex")) {
+    // 旧版本默认密码 cp4857971 → 升级为 admin / admin（仅当仍是默认密码时才自动迁移，用户改过则不动）
+    c.superAdmin.passwordHash = crypto.createHash("sha256").update("admin").digest("hex");
+    changed = true;
+  }
+  if (!Array.isArray(c.tempUsers)) {
+    c.tempUsers = [];
+    changed = true;
+  }
+  if (!Array.isArray(c.users)) {
+    c.users = [];
+    changed = true;
+  }
+  // 所有用户都需要登录验证（默认开启）：未显式设置或曾关闭的一律按开启处理。
+  // 登录弹窗已精简（无提示文字）；公网/限权无需额外配置。如需临时免登录，
+  // 超管可在「系统设置 → ⓪ 严格登录验证」关闭。
+  if (c.requireLogin !== true) {
+    c.requireLogin = true;
+    changed = true;
+  }
+  if (changed) writeAppConfig(c);
+  return c;
+}
+
+const AUTH = ensureAuthConfig();
+APP_CFG.requireLogin = AUTH.requireLogin !== false; // 与重置后的严格登录开关保持一致（默认开启）
+const TOKEN_TTL_MS = 12 * 3600 * 1000;
+
+function saveAuth() {
+  const c = readAppConfig();
+  c.sessionSecret = AUTH.sessionSecret;
+  c.superAdmin = AUTH.superAdmin;
+  c.tempUsers = AUTH.tempUsers;
+  c.users = AUTH.users;
+  writeAppConfig(c);
+}
+
+function signToken(username) {
+  const exp = Date.now() + TOKEN_TTL_MS;
+  const sig = crypto.createHmac("sha256", AUTH.sessionSecret).update(username + ":" + exp).digest("hex");
+  return Buffer.from(username + "." + exp + "." + sig).toString("base64url");
+}
+
+// 解析 Bearer Token；无效 / 过期返回 null
+function tokenIdentity(bearer) {
+  try {
+    const raw = Buffer.from(bearer, "base64url").toString("utf8");
+    const parts = raw.split(".");
+    if (parts.length !== 3) return null;
+    const [u, e, s] = parts;
+    if (!u || !e || !s) return null;
+    const want = crypto.createHmac("sha256", AUTH.sessionSecret).update(u + ":" + e).digest("hex");
+    if (want !== s) return null;
+    const exp = Number(e);
+    if (!Number.isFinite(exp) || exp < Date.now()) return null;
+    const t = AUTH.tempUsers.find((x) => x.username === u);
+    if (t) {
+      if (new Date(t.expireAt).getTime() < Date.now()) {
+        AUTH.tempUsers = AUTH.tempUsers.filter((x) => x.username !== u);
+        saveAuth();
+        return null;
+      }
+      return { uid: t.uid || u, username: u, isSuper: false, isTemp: true, isUser: false, temp: t };
+    }
+    const lu = AUTH.users.find((x) => x.username === u);
+    if (lu) {
+      if (lu.disabled) return null;
+      return { uid: lu.uid || u, username: u, isSuper: false, isTemp: false, isUser: true, isOperator: lu.role === "operator" };
+    }
+    if (AUTH.superAdmin && u === AUTH.superAdmin.username) {
+      return { uid: u, username: u, isSuper: true, isTemp: false, isUser: false };
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 当前请求身份：优先 Token，其次网关 X-Trim-Userid
+function authUser(req) {
+  const b = String(req.headers["authorization"] || "");
+  if (b) {
+    const m = b.match(/^Bearer\s+(.+)$/i);
+    if (m) return tokenIdentity(m[1].trim());
+    return null;
+  }
+  const uid = userOf(req);
+  return { uid, username: uid, isSuper: false, isTemp: false };
+}
+
+// ---------------- API 路由 ----------------
+const api = express.Router();
+
+// 身份中间件：
+//  - /auth/login、/auth/me、/health 放行（登录本身无需登录）
+//  - 携带有效 Bearer Token：以该账号身份（超管 / 登录用户 / 临时用户）放行
+//  - 无 Token：走网关注入的 X-Trim-Userid；
+//    严格登录模式（config.json requireLogin=true，需超管在系统设置显式开启）：所有用户
+//    （含管理员 NAS 用户）都必须登录验证，无 Token 一律 401，防止公网/匿名访问
+//    默认兼容模式（requireLogin=false）：打开即用，NAS 用户自动识别（首个使用者自动成为管理员）
+api.use((req, res, next) => {
+  const p = req.path;
+  // 登录/健康检查无需鉴权；me 放行但若带 Token 则解析出登录态
+  if (p === "/auth/me") {
+    const b = String(req.headers["authorization"] || "");
+    if (b) {
+      const au = authUser(req);
+      if (au) req.auth = au;
+    }
+    return next();
+  }
+  if (p === "/auth/login" || p === "/health") return next();
+
+  const b = String(req.headers["authorization"] || "");
+  if (b) {
+    const au = authUser(req);
+    if (!au) return res.status(401).json({ error: "登录已过期或凭证无效，请重新登录" });
+    req.auth = au;
+    return next();
+  }
+
+  if (APP_CFG.requireLogin !== false) {
+    // 严格模式：所有用户都需要登录验证
+    return res.status(401).json({ error: "请先登录：所有用户都需要登录验证" });
+  }
+
+  const uid = userOf(req);
+  req.auth = { uid, username: uid, isSuper: false, isTemp: false, isUser: false };
+  next();
+});
+
+api.get("/health", (req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// 登录：超级管理员 admin / 正式登录用户 / 临时访问用户
+api.post("/auth/login", (req, res) => {
+  const username = String((req.body && req.body.username) || "").replace(/[^\w.-]/g, "").trim();
+  const password = String((req.body && req.body.password) || "");
+  if (!username || !password) return res.status(400).json({ error: "用户名与密码不能为空" });
+  const sa = AUTH.superAdmin;
+  if (sa && username === sa.username && crypto.createHash("sha256").update(password).digest("hex") === sa.passwordHash) {
+    return res.json({ ok: true, token: signToken(username), username, isSuper: true, isAdmin: true, isUser: false, expireAt: null });
+  }
+  const lu = AUTH.users.find((x) => x.username === username);
+  if (lu && crypto.createHash("sha256").update(password).digest("hex") === lu.passwordHash) {
+    if (lu.disabled) return res.status(403).json({ error: "该账号已被停用，请联系管理员" });
+    return res.json({ ok: true, token: signToken(username), username, isSuper: false, isAdmin: false, isUser: true, isTemp: false, uid: lu.uid || username, expireAt: null, note: lu.note || "", isOperator: lu.role === "operator" });
+  }
+  const t = AUTH.tempUsers.find((x) => x.username === username);
+  if (t && crypto.createHash("sha256").update(password).digest("hex") === t.passwordHash) {
+    if (new Date(t.expireAt).getTime() < Date.now()) {
+      AUTH.tempUsers = AUTH.tempUsers.filter((x) => x.username !== username);
+      saveAuth();
+      return res.status(403).json({ error: "该临时账号已过期，请联系管理员" });
+    }
+    return res.json({ ok: true, token: signToken(username), username, isSuper: false, isAdmin: false, isUser: false, isTemp: true, uid: t.uid, expireAt: t.expireAt, note: t.note || "" });
+  }
+  return res.status(401).json({ error: "用户名或密码错误" });
+});
+
+// 当前登录身份（前端启动校验）
+api.get("/auth/me", (req, res) => {
+  const a = req.auth || {};
+  // 严格登录下：仅有效 Token 身份（超管/登录用户/临时用户）算已登录
+  const loggedIn = !!(a.isSuper || a.isTemp || a.isUser);
+  res.json({
+    ok: true,
+    loggedIn,
+    username: loggedIn ? a.username : null,
+    uid: a.uid,
+    isSuper: !!a.isSuper,
+    isTemp: !!a.isTemp,
+    isUser: !!a.isUser,
+    isOperator: !!a.isOperator,
+    expireAt: a.temp ? a.temp.expireAt : null,
+    admins: getAdmins()
+  });
+});
+
+// 存储方式与数据目录信息（前端“设置”页展示）
+api.get("/settings", (req, res) => {
+  res.json(Object.assign({ ok: true }, storageInfo()));
+});
+
+// 自定义数据路径：写入 config.json 的 dataDir 字段，重启后生效
+api.post("/settings/path", (req, res) => {
+  const d = String((req.body && req.body.dataDir) || "").trim();
+  if (!d) return res.status(400).json({ error: "数据路径不能为空" });
+  if (!path.isAbsolute(d)) return res.status(400).json({ error: "数据路径必须是绝对路径（如 /vol1/xxx/custdb-data）" });
+  try {
+    fs.mkdirSync(d, { recursive: true });
+    fs.accessSync(d, fs.constants.W_OK);
+  } catch (e) {
+    return res.status(400).json({
+      error: "路径无法创建或不可写：" + (e.message || String(e)) +
+        "；如目标在存储空间/共享文件夹下，请先在文件管理中对该文件夹授予应用用户写权限"
+    });
+  }
+  const cfg = readAppConfig();
+  cfg.dataDir = d;
+  writeAppConfig(cfg);
+  res.json({ ok: true, dataDir: d, restartNeeded: true, message: "已保存，重启应用后生效" });
+});
+
+// 自定义服务端口：写入 config.json 的 port 字段，重启后生效
+api.post("/settings/port", (req, res) => {
+  const p = Number(req.body && req.body.port);
+  if (!Number.isInteger(p) || p < 1 || p > 65535) {
+    return res.status(400).json({ error: "端口须为 1-65535 的整数" });
+  }
+  const cfg = readAppConfig();
+  cfg.port = p;
+  writeAppConfig(cfg);
+  res.json({ ok: true, port: p, restartNeeded: true, message: "已保存，重启应用后生效" });
+});
+
+// ---------------- 管理员 API ----------------
+api.get("/admin/status", (req, res) => {
+  const a = req.auth || { uid: userOf(req), isSuper: false };
+  const admin = a.isSuper || (!a.isOperator && isAdminUser(a.uid)); // 操作员不计管理员；名单为空时首个使用者自动成为管理员
+  res.json({ ok: true, isAdmin: admin, isSuper: !!a.isSuper, isOperator: !!a.isOperator, username: a.username, admins: admin ? getAdmins() : [] });
+});
+
+api.get("/admin/users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({ users: listUsersSummary(), admins: getAdmins() });
+});
+
+api.get("/admin/stats", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String(req.query.uid || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const all = readCustomersByUid(uid).map(decorate);
+  const count = (s) => all.filter((c) => c.status === s).length;
+  res.json({
+    total: all.length,
+    expired: count("已到期"),
+    due30: count("30天内到期"),
+    due60: count("60天内到期"),
+    normal: count("正常"),
+    unset: count("未设置"),
+    dueSoon: all
+      .filter((c) => c.status === "已到期" || c.status === "30天内到期" || c.status === "60天内到期")
+      .map((c) => ({ id: c.id, name: c.name, phone: c.phone, contractEnd: c.contractEnd, status: c.status, daysLeft: c.daysLeft }))
+  });
+});
+
+api.get("/admin/customers", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String(req.query.uid || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  let list = readCustomersByUid(uid).map(decorate);
+  const kw = String(req.query.q || "").trim().toLowerCase();
+  const st = String(req.query.status || "").trim();
+  if (kw) {
+    list = list.filter((c) =>
+      [c.name, c.phone, c.idAddress, c.installAddress, c.planName, c.addonServices]
+        .some((v) => String(v || "").toLowerCase().includes(kw))
+    );
+  }
+  if (st && st !== "全部") {
+    list = list.filter((c) => c.status === st);
+  }
+  list.sort((a, b) => (a.daysLeft == null ? 999999 : a.daysLeft) - (b.daysLeft == null ? 999999 : b.daysLeft));
+  res.json({ customers: list, total: list.length, uid });
+});
+
+api.post("/admin/customers", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const b = req.body || {};
+  if (!b.name || !b.phone) return res.status(400).json({ error: "姓名和联系电话为必填项" });
+  if (b.contractEnd && !DATE_RE.test(b.contractEnd)) return res.status(400).json({ error: "协议到期日期格式应为 YYYY-MM-DD" });
+  const list = readCustomersByUid(uid);
+  const rec = {
+    id: "KH-" + Date.now().toString().slice(-8) + crypto.randomBytes(2).toString("hex").toUpperCase(),
+    name: String(b.name).trim(),
+    phone: String(b.phone).trim(),
+    idAddress: String(b.idAddress || "").trim(),
+    installAddress: String(b.installAddress || "").trim(),
+    planName: String(b.planName || "").trim(),
+    planFee: b.planFee === "" || b.planFee == null ? null : Number(b.planFee),
+    addonServices: String(b.addonServices || "").trim(),
+    operator: String(b.operator || "").trim() || detectOperator(String(b.phone || "")) || "",
+    remark: String(b.remark || "").trim(),
+    discount: String(b.discount || "").trim(),
+    contractStart: DATE_RE.test(b.contractStart || "") ? b.contractStart : "",
+    contractEnd: DATE_RE.test(b.contractEnd || "") ? b.contractEnd : "",
+    createdAt: new Date().toISOString(),
+    createdBy: creatorOf(req)
+  };
+  list.push(rec);
+  writeCustomersByUid(uid, list);
+  res.json({ customer: decorate(rec) });
+});
+
+api.put("/admin/customers/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const list = readCustomersByUid(uid);
+  const idx = list.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "客户不存在" });
+  const b = req.body || {};
+  const _ce = b.contractEnd == null ? "" : String(b.contractEnd).trim();
+  if (_ce !== "" && !DATE_RE.test(_ce)) {
+    return res.status(400).json({ error: "协议到期日期格式应为 YYYY-MM-DD" });
+  }
+  const upd = Object.assign({}, list[idx]);
+  ["name", "phone", "idAddress", "installAddress", "planName", "addonServices", "operator", "remark", "discount", "contractStart", "contractEnd"].forEach((k) => {
+    if (b[k] !== undefined) upd[k] = String(b[k] == null ? "" : b[k]).trim();
+  });
+  if (b.planFee !== undefined) upd.planFee = b.planFee === "" || b.planFee == null ? null : Number(b.planFee);
+  if (!upd.operator && upd.phone) upd.operator = detectOperator(upd.phone) || "";
+  if (!upd.name || !upd.phone) return res.status(400).json({ error: "姓名和联系电话为必填项" });
+  list[idx] = upd;
+  writeCustomersByUid(uid, list);
+  res.json({ customer: decorate(upd) });
+});
+
+api.delete("/admin/customers/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.query && req.query.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const ok = softDeleteCustomer(req.params.id, uid, creatorOf(req));
+  if (!ok) return res.status(404).json({ error: "客户不存在" });
+  res.json({ deleted: req.params.id });
+});
+
+api.post("/admin/admins", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const action = String((req.body && req.body.action) || "");
+  const username = String((req.body && req.body.username) || "").replace(/[^\w.-]/g, "").trim();
+  if (!username) return res.status(400).json({ error: "用户名不能为空" });
+  const sa = AUTH.superAdmin;
+  const isSuper = !!(req.auth && req.auth.isSuper);
+  const admins = getAdmins();
+  if (action === "add") {
+    if (admins.includes(username)) return res.json({ ok: true, admins: admins });
+    admins.push(username);
+  } else if (action === "remove") {
+    if (username === (sa && sa.username) && !isSuper) {
+      return res.status(403).json({ error: "超级管理员账号不可被普通管理员移除" });
+    }
+    const i = admins.indexOf(username);
+    if (i < 0) return res.json({ ok: true, admins: admins });
+    admins.splice(i, 1);
+  } else {
+    return res.status(400).json({ error: "action 须为 add 或 remove" });
+  }
+  setAdmins(admins);
+  res.json({ ok: true, admins: getAdmins() });
+});
+
+// ---------------- 导出授权码管理（管理员生成，临时用户导出时使用） ----------------
+api.post("/admin/export-codes", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const minutes = Math.max(5, Math.min(1440, Number((req.body && req.body.minutes) || 30) || 30));
+  const code = crypto.randomBytes(4).toString("hex").toUpperCase(); // 8 位随机码，单次有效
+  const rec = {
+    code,
+    note: String((req.body && req.body.note) || "").slice(0, 50),
+    expireAt: new Date(Date.now() + minutes * 60000).toISOString(),
+    used: false,
+    createdBy: creatorOf(req),
+    createdAt: new Date().toISOString()
+  };
+  const active = activeExportCodes();
+  active.push(rec);
+  writeExportCodes(active);
+  res.json({ ok: true, code: rec.code, expireAt: rec.expireAt, minutes });
+});
+
+api.get("/admin/export-codes", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({ codes: activeExportCodes().map((x) => ({ code: x.code, note: x.note || "", expireAt: x.expireAt, createdBy: x.createdBy, createdAt: x.createdAt })) });
+});
+
+api.delete("/admin/export-codes/:code", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const code = String(req.params.code || "").toUpperCase();
+  const list = readExportCodes();
+  const before = list.length;
+  const after = list.filter((x) => x.code !== code);
+  if (after.length === before) return res.status(404).json({ error: "授权码不存在" });
+  writeExportCodes(after);
+  res.json({ ok: true, revoked: code });
+});
+
+// ---------------- 超级管理员专属 ----------------
+// 修改超级管理员密码
+api.post("/admin/super-password", (req, res) => {
+  if (!requireSuper(req, res)) return;
+  const oldPw = String((req.body && req.body.oldPassword) || "");
+  const newPw = String((req.body && req.body.newPassword) || "");
+  if (newPw.length < 6) return res.status(400).json({ error: "新密码至少 6 位" });
+  if (crypto.createHash("sha256").update(oldPw).digest("hex") !== AUTH.superAdmin.passwordHash) {
+    return res.status(403).json({ error: "原密码不正确" });
+  }
+  AUTH.superAdmin.passwordHash = crypto.createHash("sha256").update(newPw).digest("hex");
+  saveAuth();
+  res.json({ ok: true, message: "超级管理员密码已更新（下次登录生效）" });
+});
+
+// 临时访问用户列表
+api.get("/admin/temp-users", (req, res) => {
+  if (!requireSuper(req, res)) return;
+  const now = Date.now();
+  const list = AUTH.tempUsers
+    .filter((t) => new Date(t.expireAt).getTime() >= now)
+    .map((t) => ({ username: t.username, uid: t.uid, expireAt: t.expireAt, note: t.note || "", createdAt: t.createdAt }));
+  const expired = AUTH.tempUsers.filter((t) => new Date(t.expireAt).getTime() < now);
+  if (expired.length) {
+    AUTH.tempUsers = AUTH.tempUsers.filter((t) => new Date(t.expireAt).getTime() >= now);
+    saveAuth();
+  }
+  res.json({ users: list, expired: expired.map((t) => ({ username: t.username, expireAt: t.expireAt })) });
+});
+
+// 创建临时访问用户：username+password+绑定数据用户 uid+有效期天数+备注
+api.post("/admin/temp-users", (req, res) => {
+  if (!requireSuper(req, res)) return;
+  const username = String((req.body && req.body.username) || "").replace(/[^\w.-]/g, "").trim();
+  const password = String((req.body && req.body.password) || "");
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "").trim() || username;
+  const days = Math.max(1, Math.min(365, Number(req.body && req.body.days) || 1));
+  const note = String((req.body && req.body.note) || "").slice(0, 100);
+  if (!username || password.length < 4) return res.status(400).json({ error: "用户名不能为空且密码至少 4 位" });
+  if (AUTH.superAdmin && username === AUTH.superAdmin.username) {
+    return res.status(400).json({ error: "不能与超级管理员同名" });
+  }
+  if (AUTH.tempUsers.some((t) => t.username === username)) {
+    return res.status(400).json({ error: "该临时用户名已存在" });
+  }
+  const expireAt = new Date(Date.now() + days * 24 * 3600 * 1000).toISOString();
+  AUTH.tempUsers.push({
+    username,
+    passwordHash: crypto.createHash("sha256").update(password).digest("hex"),
+    uid,
+    expireAt,
+    note,
+    createdAt: new Date().toISOString()
+  });
+  saveAuth();
+  res.json({ ok: true, user: { username, uid, expireAt, note } });
+});
+
+// 删除临时访问用户（超管专属）
+api.delete("/admin/temp-users/:username", (req, res) => {
+  if (!requireSuper(req, res)) return;
+  const username = String(req.params.username || "").replace(/[^\w.-]/g, "").trim();
+  const before = AUTH.tempUsers.length;
+  AUTH.tempUsers = AUTH.tempUsers.filter((t) => t.username !== username);
+  if (AUTH.tempUsers.length === before) return res.status(404).json({ error: "临时用户不存在" });
+  saveAuth();
+  res.json({ ok: true, deleted: username });
+});
+
+// 强制登录开关（超管专属）：开启后未登录且非管理员的访问一律 401
+api.post("/admin/require-login", (req, res) => {
+  if (!requireSuper(req, res)) return;
+  const v = !!(req.body && req.body.requireLogin);
+  const c = readAppConfig();
+  c.requireLogin = v;
+  writeAppConfig(c);
+  APP_CFG.requireLogin = v; // 立即生效
+  res.json({ ok: true, requireLogin: v, message: v ? "已开启强制登录：未登录且非管理员将无法访问" : "已关闭强制登录：NAS 用户可自动访问" });
+});
+
+// ---------------- 正式登录用户（管理员可管理，长期有效账号） ----------------
+// 列表
+api.get("/admin/login-users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  res.json({
+    users: AUTH.users.map((u) => ({
+      username: u.username,
+      uid: u.uid || u.username,
+      note: u.note || "",
+      role: u.role === "operator" ? "operator" : "admin",
+      disabled: !!u.disabled,
+      createdAt: u.createdAt
+    }))
+  });
+});
+
+// 新增登录用户
+api.post("/admin/login-users", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const username = String((req.body && req.body.username) || "").replace(/[^\w.-]/g, "").trim();
+  const password = String((req.body && req.body.password) || "");
+  if (!username || !password) return res.status(400).json({ error: "用户名与密码不能为空" });
+  if (password.length < 6) return res.status(400).json({ error: "密码至少 6 位" });
+  if (AUTH.users.some((u) => u.username === username)) return res.status(400).json({ error: "该用户名已存在" });
+  if (AUTH.superAdmin && username === AUTH.superAdmin.username) return res.status(400).json({ error: "该用户名已存在" });
+  if (AUTH.tempUsers.some((t) => t.username === username)) return res.status(400).json({ error: "该用户名已被临时账号占用" });
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "").trim() || username;
+  const role = (req.body && req.body.role) === "operator" ? "operator" : "admin";
+  AUTH.users.push({
+    username,
+    passwordHash: crypto.createHash("sha256").update(password).digest("hex"),
+    uid,
+    note: String((req.body && req.body.note) || "").trim(),
+    role,
+    disabled: false,
+    createdAt: new Date().toISOString()
+  });
+  saveAuth();
+  res.json({ ok: true, user: { username, uid, note: String((req.body && req.body.note) || "").trim(), role, disabled: false, createdAt: AUTH.users.find((u) => u.username === username).createdAt } });
+});
+
+// 修改登录用户（密码 / 数据绑定 / 备注 / 停用启用）
+api.put("/admin/login-users/:username", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const username = String(req.params.username || "").replace(/[^\w.-]/g, "").trim();
+  const lu = AUTH.users.find((u) => u.username === username);
+  if (!lu) return res.status(404).json({ error: "登录用户不存在" });
+  const b = req.body || {};
+  if (b.password !== undefined) {
+    const p = String(b.password);
+    if (p.length < 6) return res.status(400).json({ error: "密码至少 6 位" });
+    lu.passwordHash = crypto.createHash("sha256").update(p).digest("hex");
+  }
+  if (b.uid !== undefined) {
+    const uid = String(b.uid).replace(/[^\w.-]/g, "").trim();
+    if (!uid) return res.status(400).json({ error: "数据绑定不能为空" });
+    lu.uid = uid;
+  }
+  if (b.note !== undefined) lu.note = String(b.note).trim();
+  if (b.role !== undefined) lu.role = String(b.role) === "operator" ? "operator" : "admin";
+  if (b.disabled !== undefined) lu.disabled = !!b.disabled;
+  saveAuth();
+  res.json({ ok: true, user: { username: lu.username, uid: lu.uid, note: lu.note || "", role: lu.role === "operator" ? "operator" : "admin", disabled: !!lu.disabled, createdAt: lu.createdAt } });
+});
+
+// 删除登录用户
+api.delete("/admin/login-users/:username", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const username = String(req.params.username || "").replace(/[^\w.-]/g, "").trim();
+  const before = AUTH.users.length;
+  AUTH.users = AUTH.users.filter((u) => u.username !== username);
+  if (AUTH.users.length === before) return res.status(404).json({ error: "登录用户不存在" });
+  saveAuth();
+  res.json({ ok: true, deleted: username });
+});
+
+// 管理员统计：自动统计（状态分布）+ 按套餐统计 + 协议统计（到期月份分布）
+// uid 可选：不传 = 全部用户合计；传 = 仅统计该用户
+api.get("/admin/analytics", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String(req.query.uid || "").replace(/[^\w.-]/g, "");
+  const all = (uid ? readCustomersByUid(uid) : readAllCustomers()).map(decorate);
+  const count = (s) => all.filter((c) => c.status === s).length;
+
+  // 自动统计（状态分布）
+  const stats = {
+    total: all.length,
+    expired: count("已到期"),
+    due30: count("30天内到期"),
+    due60: count("60天内到期"),
+    normal: count("正常"),
+    unset: count("未设置")
+  };
+
+  // 按套餐统计
+  const planMap = {};
+  for (const c of all) {
+    const k = String(c.planName || "").trim() || "未设置套餐";
+    planMap[k] = planMap[k] || { plan: k, count: 0, feeTotal: 0, expired: 0 };
+    planMap[k].count += 1;
+    if (c.planFee != null) planMap[k].feeTotal += c.planFee;
+    if (c.status === "已到期") planMap[k].expired += 1;
+  }
+  const byPlan = Object.values(planMap)
+    .map((p) => ({ plan: p.plan, count: p.count, feeTotal: Math.round(p.feeTotal * 100) / 100, feeAvg: p.count ? Math.round((p.feeTotal / p.count) * 100) / 100 : 0, expired: p.expired }))
+    .sort((a, b) => b.count - a.count);
+
+  // 协议统计：按到期年月分布（未来 12 个月 + 已过期 + 未设置）
+  const monthMap = {};
+  let overdue = 0, unset = 0;
+  for (const c of all) {
+    if (!c.contractEnd) { unset += 1; continue; }
+    const dt = new Date(c.contractEnd + "T00:00:00");
+    if (isNaN(dt.getTime())) { unset += 1; continue; }
+    if (c.daysLeft != null && c.daysLeft < 0) { overdue += 1; continue; }
+    const key = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, "0");
+    monthMap[key] = (monthMap[key] || 0) + 1;
+  }
+  const now = new Date();
+  const byMonth = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const key = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    byMonth.push({ month: key, count: monthMap[key] || 0 });
+  }
+
+  res.json({
+    ok: true,
+    uid: uid || null,
+    stats,
+    byPlan,
+    byMonth,
+    overdue,
+    unset
+  });
+});
+
+api.get("/customers", (req, res) => {
+  // v0.0.27：超级管理员/管理员登录后，主页直接展示全库客户资料（不分谁添加、含导入数据）
+  let list = (adminLike(req) ? readAllCustomers() : readCustomers(req)).map(decorate);
+  const kw = String(req.query.q || "").trim().toLowerCase();
+  const st = String(req.query.status || "").trim();
+  if (kw) {
+    list = list.filter((c) =>
+      [c.name, c.phone, c.idAddress, c.installAddress, c.planName, c.addonServices]
+        .some((v) => String(v || "").toLowerCase().includes(kw))
+    );
+  }
+  if (st && st !== "全部") {
+    list = list.filter((c) => c.status === st);
+  }
+  list.sort((a, b) => (a.daysLeft == null ? 999999 : a.daysLeft) - (b.daysLeft == null ? 999999 : b.daysLeft));
+  // 临时用户查看数据脱敏（身份证地址/装机地址后9位、联系号码尾数打码）
+  if (isTempUser(req)) list = list.map(maskTempCustomer);
+  res.json({ customers: list, total: list.length });
+});
+
+api.get("/stats", (req, res) => {
+  let all = (adminLike(req) ? readAllCustomers() : readCustomers(req)).map(decorate);
+  if (isTempUser(req)) all = all.map(maskTempCustomer);
+  const count = (s) => all.filter((c) => c.status === s).length;
+  const dueSoon = all
+    .filter((c) => c.status === "已到期" || c.status === "30天内到期" || c.status === "60天内到期")
+    .map((c) => ({ id: c.id, name: c.name, phone: c.phone, contractEnd: c.contractEnd, status: c.status, daysLeft: c.daysLeft }));
+  res.json({
+    total: all.length,
+    expired: count("已到期"),
+    due30: count("30天内到期"),
+    due60: count("60天内到期"),
+    normal: count("正常"),
+    unset: count("未设置"),
+    dueSoon
+  });
+});
+
+api.post("/customers", (req, res) => {
+  const b = req.body || {};
+  if (!b.name || !b.phone) return res.status(400).json({ error: "姓名和联系电话为必填项" });
+  if (b.contractEnd && !DATE_RE.test(b.contractEnd)) return res.status(400).json({ error: "协议到期日期格式应为 YYYY-MM-DD" });
+  const list = readCustomers(req);
+  const rec = {
+    id: "KH-" + Date.now().toString().slice(-8) + crypto.randomBytes(2).toString("hex").toUpperCase(),
+    name: String(b.name).trim(),
+    phone: String(b.phone).trim(),
+    idAddress: String(b.idAddress || "").trim(),
+    installAddress: String(b.installAddress || "").trim(),
+    planName: String(b.planName || "").trim(),
+    planFee: b.planFee === "" || b.planFee == null ? null : Number(b.planFee),
+    addonServices: String(b.addonServices || "").trim(),
+    operator: String(b.operator || "").trim() || detectOperator(String(b.phone || "")) || "",
+    remark: String(b.remark || "").trim(),
+    discount: String(b.discount || "").trim(),
+    contractStart: DATE_RE.test(b.contractStart || "") ? b.contractStart : "",
+    contractEnd: DATE_RE.test(b.contractEnd || "") ? b.contractEnd : "",
+    createdAt: new Date().toISOString(),
+    createdBy: creatorOf(req)
+  };
+  list.push(rec);
+  writeCustomers(req, list);
+  res.json({ customer: decorate(rec) });
+});
+
+api.put("/customers/:id", (req, res) => {
+  const adm = adminLike(req);
+  const list = adm ? readAllCustomers() : readCustomers(req);
+  const idx = list.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "客户不存在" });
+  const a = req.auth || {};
+  if (adm && !a.isSuper && String(list[idx].createdBy || "") !== creatorOf(req)) {
+    return res.status(403).json({ error: "仅可编辑自己添加的数据（自建数据）；其他用户添加的数据如需修改请联系超级管理员" });
+  }
+  const b = req.body || {};
+  const _ce = b.contractEnd == null ? "" : String(b.contractEnd).trim();
+  if (_ce !== "" && !DATE_RE.test(_ce)) {
+    return res.status(400).json({ error: "协议到期日期格式应为 YYYY-MM-DD" });
+  }
+  const upd = Object.assign({}, list[idx]);
+  ["name", "phone", "idAddress", "installAddress", "planName", "addonServices", "operator", "remark", "discount", "contractStart", "contractEnd"].forEach((k) => {
+    if (b[k] !== undefined) upd[k] = String(b[k] == null ? "" : b[k]).trim();
+  });
+  if (b.planFee !== undefined) upd.planFee = b.planFee === "" || b.planFee == null ? null : Number(b.planFee);
+  if (!upd.operator && upd.phone) upd.operator = detectOperator(upd.phone) || "";
+  if (!upd.name || !upd.phone) return res.status(400).json({ error: "姓名和联系电话为必填项" });
+  if (adm) {
+    // 写回原归属用户的数据（主页全库视图下跨用户编辑）
+    const owner = upd.user || a.uid;
+    const ownerList = readCustomersByUid(owner);
+    const oi = ownerList.findIndex((c) => c.id === upd.id);
+    if (oi < 0) ownerList.push(upd); else ownerList[oi] = upd;
+    writeCustomersByUid(owner, ownerList);
+  } else {
+    list[idx] = upd;
+    writeCustomers(req, list);
+  }
+  res.json({ customer: decorate(upd) });
+});
+
+api.delete("/customers/:id", (req, res) => {
+  if (isTempUser(req)) return res.status(403).json({ error: "临时用户无删除权限" });
+  const a = req.auth || {};
+  const uid = a.uid || userOf(req);
+  if (adminLike(req)) {
+    // v0.0.27：管理员/超管主页全库视图删除——管理员仅可删自己添加的数据（自建）；超管可删任意
+    const row = sqliteGet().prepare("SELECT * FROM customers WHERE id=?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "客户不存在" });
+    if (!a.isSuper && String(row.createdBy || "") !== creatorOf(req)) {
+      return res.status(403).json({ error: "仅可删除自己添加的数据（自建数据）；其他用户添加的数据如需删除请联系超级管理员" });
+    }
+    const ok = softDeleteCustomer(row.id, row.user, creatorOf(req));
+    if (!ok) return res.status(404).json({ error: "客户不存在" });
+    return res.json({ deleted: row.id, toRecycle: true });
+  }
+  const ok = softDeleteCustomer(req.params.id, uid, creatorOf(req));
+  if (!ok) return res.status(404).json({ error: "客户不存在" });
+  res.json({ deleted: req.params.id });
+});
+
+// 数据导入：multipart 表单，字段 file（文件）、mode（append=追加 / replace=清空后导入）
+api.post("/import", upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "请上传文件" });
+  const mode = String(req.body.mode || "append") === "replace" ? "replace" : "append";
+  let type = String((req.body && req.body.type) || "").trim() === "portin" ? "portin" : "customers";
+  const filename = String(req.file.originalname || "");
+  const ext = path.extname(filename).toLowerCase();
+
+  // 管理员可导入到指定用户（uid 为空则导入到当前用户）
+  let targetUid = req.auth ? req.auth.uid : userOf(req);
+  const bodyUid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "");
+  if (bodyUid) {
+    const a = req.auth || {};
+    if (!a.isSuper && !isAdminUser(a.uid || userOf(req))) return res.status(403).json({ error: "仅管理员可导入到指定用户" });
+    targetUid = bodyUid;
+  }
+
+  let rows = []; // 二维数组
+  let jsonObjects = null;   // 正式客户 JSON 记录
+  let jsonPortin = null;    // 异网用户 JSON 记录
+
+  try {
+    if (ext === ".xlsx" || ext === ".xls") {
+      const wb = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: true });
+      rows = rows.map((r) => r.map(cellText));
+    } else if (ext === ".json") {
+      const parsed = JSON.parse(req.file.buffer.toString("utf8"));
+      // 兼容本应用「导出数据」生成的 JSON（{exportedAt,type,scope,count,items:[...]}），可直接回导
+      if (Array.isArray(parsed)) {
+        if (type === "portin") jsonPortin = parsed;
+        else jsonObjects = parsed;
+      } else if (parsed && Array.isArray(parsed.customers)) {
+        jsonObjects = parsed.customers;
+      } else if (parsed && Array.isArray(parsed.portin)) {
+        jsonPortin = parsed.portin;
+      } else if (parsed && Array.isArray(parsed.items)) {
+        if (parsed.type === "portin" || type === "portin") jsonPortin = parsed.items;
+        else jsonObjects = parsed.items;
+      } else {
+        return res.status(400).json({ error: "JSON 文件需为数组，或包含 customers / portin / items 数组（可直接回导本应用导出的 JSON）" });
+      }
+    } else {
+      // CSV / TXT 及无扩展名文件：按文本解析（自动识别分隔符）
+      const text = req.file.buffer.toString("utf8");
+      rows = parseTextTable(text);
+      if (!rows.length) return res.status(400).json({ error: "未能识别文件内容（支持 CSV / TXT 分隔符：逗号、Tab、分号、竖线）" });
+    }
+  } catch (e) {
+    return res.status(400).json({ error: "文件解析失败：" + (e.message || String(e)) });
+  }
+
+  // 表头识别（rows 模式）：命中「家庭住址 / 更换决策人」且未命中「姓名 / 装机地址」→ 异网用户导入
+  if (rows.length && !jsonObjects && !jsonPortin) {
+    const hit = rows[0].map((h) => String(h || "").trim());
+    const hasPortinHdr = hit.some((h) => ["家庭住址", "更换决策人", "familyaddress", "decider"].includes(normHeader(h)));
+    const hasCustomerHdr = hit.some((h) => ["姓名", "装机地址", "name", "installaddress"].includes(normHeader(h)));
+    if (hasPortinHdr && !hasCustomerHdr) type = "portin";
+  }
+
+  const imported = [];
+  const errors = [];
+  const warnings = [];
+  const MAX_ERR = 20;
+
+  function pushRecord(rec, warns, rowNo) {
+    if (!rec) {
+      if (errors.length < MAX_ERR) errors.push({ row: rowNo, reason: warns });
+      return;
+    }
+    imported.push(rec);
+    if (warns && warns.length) warnings.push({ row: rowNo, reasons: warns });
+  }
+
+  // 异网用户行 → 记录（支持中文/英文表头，列顺序不限）
+  function rowToPortin(cells, mapping) {
+    const b = {};
+    (mapping || PORTIN_FIELDS).forEach((f, i) => {
+      if (mapping) b[f] = cells[i] == null ? "" : cells[i];
+      else if (i < cells.length) b[PORTIN_FIELDS[i]] = cells[i];
+    });
+    const r = buildPortinRecord(b);
+    if (r.error) return { fatal: r.error };
+    return { rec: r.rec };
+  }
+
+  if (jsonPortin) {
+    jsonPortin.forEach((obj, i) => {
+      if (!obj || typeof obj !== "object") {
+        if (errors.length < MAX_ERR) errors.push({ row: i + 1, reason: "记录格式不正确" });
+        return;
+      }
+      const r = buildPortinRecord(obj);
+      pushRecord(r.error ? null : r.rec, r.error || [], i + 1);
+    });
+  } else if (jsonObjects) {
+    jsonObjects.forEach((obj, i) => {
+      if (!obj || typeof obj !== "object") {
+        if (errors.length < MAX_ERR) errors.push({ row: i + 1, reason: "记录格式不正确" });
+        return;
+      }
+      const raw = {};
+      CANONICAL_ORDER.forEach((f) => {
+        for (const k of Object.keys(obj)) {
+          if (fieldByHeader(k) === f) { raw[f] = obj[k]; break; }
+        }
+      });
+      const r = rowToRecordFromRaw(raw);
+      pushRecord(r.rec, r.fatal ? r.fatal : r.warns, i + 1);
+    });
+  } else {
+    // 表头识别：首行命中 ≥2 个已知字段名 → 作为表头建立列映射
+    let mapping = null;
+    let startIdx = 0;
+    if (rows.length > 0) {
+      if (type === "portin") {
+        const pm = rows[0].map(portinFieldByHeader);
+        if (pm.filter(Boolean).length >= 2) { mapping = pm; startIdx = 1; }
+      } else {
+        const hit = rows[0].map(fieldByHeader).filter(Boolean);
+        if (hit.length >= 2) { mapping = rows[0].map(fieldByHeader); startIdx = 1; }
+      }
+    }
+    for (let i = startIdx; i < rows.length; i++) {
+      const cells = rows[i];
+      if (!cells.some((c) => String(c).trim() !== "")) continue; // 空行跳过
+      if (type === "portin") {
+        const r = rowToPortin(cells, mapping);
+        pushRecord(r.rec, r.fatal || [], i + 1);
+      } else {
+        const r = rowToRecord(cells, mapping);
+        pushRecord(r.rec, r.fatal ? r.fatal : r.warns, i + 1);
+      }
+    }
+  }
+
+  if (!imported.length) {
+    return res.status(400).json({ imported: 0, skipped: errors.length, errors, warnings, message: "未导入任何有效记录" });
+  }
+
+  // v0.0.24：导入数据标记创建人（便于超级管理员按创建人查看/统计）
+  const importer = creatorOf(req);
+  imported.forEach((c) => { if (!c.createdBy) c.createdBy = importer; });
+
+  if (type === "portin") {
+    let list = readPortinByUid(targetUid);
+    if (mode === "replace") list = [];
+    list = list.concat(imported);
+    writePortinByUid(targetUid, list);
+  } else {
+    let list = readCustomersByUid(targetUid);
+    if (mode === "replace") list = [];
+    list = list.concat(imported);
+    writeCustomersByUid(targetUid, list);
+  }
+
+  res.json({
+    mode,
+    type,
+    imported: imported.length,
+    skipped: errors.length,
+    totalRows: errors.length + imported.length,
+    errors,
+    warnings
+  });
+});
+
+// ---------------- 异网用户（策反名单）API ----------------
+// 字段：联系电话、家庭住址、套餐费用、套餐名称、更换决策人
+
+function portinFilter(list, kw) {
+  const k = String(kw || "").trim().toLowerCase();
+  if (!k) return list;
+  return list.filter((c) =>
+    [c.phone, c.familyAddress, c.planName, c.decider, c.operator, c.remark]
+      .some((v) => String(v || "").toLowerCase().includes(k))
+  );
+}
+
+function portinStatsOf(list) {
+  const count = list.length;
+  const feeSum = list.reduce((s, c) => (c.planFee == null ? s : s + c.planFee), 0);
+  return {
+    total: count,
+    feeSum: Math.round(feeSum * 100) / 100,
+    hasDecider: list.filter((c) => String(c.decider || "").trim() !== "").length
+  };
+}
+
+// 异网用户字段与表头别名（导入用）
+const PORTIN_FIELDS = ["phone", "familyAddress", "planName", "planFee", "decider", "operator", "remark", "discount"];
+const PORTIN_ALIASES = {
+  phone: ["联系电话", "电话", "手机", "手机号码", "phone", "tel"],
+  familyAddress: ["家庭住址", "住址", "地址", "familyaddress", "homeaddress"],
+  planName: ["套餐名称", "套餐", "planname"],
+  planFee: ["套餐费用", "套餐费", "月费", "资费", "planfee"],
+  decider: ["更换决策人", "决策人", "decider"],
+  operator: ["运营商", "所属运营商", "异网运营商", "现用运营商", "operator"],
+  remark: ["备注", "备注信息", "备注说明", "remark", "note"],
+  discount: ["折扣", "优惠", "折扣优惠", "discount", "off"]
+};
+function portinFieldByHeader(h) {
+  const key = normHeader(h);
+  for (const field of PORTIN_FIELDS) {
+    if (PORTIN_ALIASES[field].some((a) => normHeader(a) === key)) return field;
+  }
+  return null;
+}
+
+function buildPortinRecord(b) {
+  const phone = String(b.phone || "").trim();
+  if (!phone) return { error: "联系电话为必填项" };
+  return {
+    rec: {
+      id: "YW-" + Date.now().toString().slice(-8) + crypto.randomBytes(2).toString("hex").toUpperCase(),
+      phone,
+      familyAddress: String(b.familyAddress || "").trim(),
+      planName: String(b.planName || "").trim(),
+      planFee: b.planFee === "" || b.planFee == null ? null : Number(b.planFee),
+      decider: String(b.decider || "").trim(),
+      operator: String(b.operator || "").trim() || detectOperator(phone) || "",
+      remark: String(b.remark || "").trim(),
+      discount: String(b.discount || "").trim(),
+      createdAt: new Date().toISOString()
+    }
+  };
+}
+
+// 普通用户：自己的异网用户（临时用户查看时联系号码脱敏）；管理员/超管：主页全库异网用户（v0.0.27）
+api.get("/portin", (req, res) => {
+  let list = portinFilter(adminLike(req) ? readAllPortin() : readPortin(req), req.query.q);
+  if (isTempUser(req)) list = list.map(maskTempPortin);
+  res.json({ portin: list, total: list.length });
+});
+
+api.get("/portin/stats", (req, res) => {
+  res.json(portinStatsOf(adminLike(req) ? readAllPortin() : readPortin(req)));
+});
+
+api.post("/portin", (req, res) => {
+  const r = buildPortinRecord(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  r.rec.createdBy = creatorOf(req);
+  const list = readPortin(req);
+  list.push(r.rec);
+  writePortin(req, list);
+  res.json({ portin: r.rec });
+});
+
+api.put("/portin/:id", (req, res) => {
+  const adm = adminLike(req);
+  const list = adm ? readAllPortin() : readPortin(req);
+  const idx = list.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "异网用户不存在" });
+  const a = req.auth || {};
+  if (adm && !a.isSuper && String(list[idx].createdBy || "") !== creatorOf(req)) {
+    return res.status(403).json({ error: "仅可编辑自己添加的数据（自建数据）；其他用户添加的数据如需修改请联系超级管理员" });
+  }
+  const b = req.body || {};
+  const upd = Object.assign({}, list[idx]);
+  ["phone", "familyAddress", "planName", "decider", "operator", "remark", "discount"].forEach((k) => {
+    if (b[k] !== undefined) upd[k] = String(b[k] == null ? "" : b[k]).trim();
+  });
+  if (b.planFee !== undefined) upd.planFee = b.planFee === "" || b.planFee == null ? null : Number(b.planFee);
+  if (!upd.operator && upd.phone) upd.operator = detectOperator(upd.phone) || "";
+  if (!upd.phone) return res.status(400).json({ error: "联系电话为必填项" });
+  if (adm) {
+    const owner = upd.user || a.uid;
+    const ownerList = readPortinByUid(owner);
+    const oi = ownerList.findIndex((c) => c.id === upd.id);
+    if (oi < 0) ownerList.push(upd); else ownerList[oi] = upd;
+    writePortinByUid(owner, ownerList);
+  } else {
+    list[idx] = upd;
+    writePortin(req, list);
+  }
+  res.json({ portin: upd });
+});
+
+api.delete("/portin/:id", (req, res) => {
+  if (isTempUser(req)) return res.status(403).json({ error: "临时用户无删除权限" });
+  const a = req.auth || {};
+  const uid = a.uid || userOf(req);
+  if (adminLike(req)) {
+    // v0.0.27：管理员/超管主页全库视图删除异网用户——管理员仅可删自己添加的数据；超管可删任意
+    const row = sqliteGet().prepare("SELECT * FROM portin WHERE id=?").get(req.params.id);
+    if (!row) return res.status(404).json({ error: "异网用户不存在" });
+    if (!a.isSuper && String(row.createdBy || "") !== creatorOf(req)) {
+      return res.status(403).json({ error: "仅可删除自己添加的数据（自建数据）；其他用户添加的数据如需删除请联系超级管理员" });
+    }
+    const ok = softDeletePortin(row.id, row.user, creatorOf(req));
+    if (!ok) return res.status(404).json({ error: "异网用户不存在" });
+    return res.json({ deleted: row.id, toRecycle: true });
+  }
+  const ok = softDeletePortin(req.params.id, uid, creatorOf(req));
+  if (!ok) return res.status(404).json({ error: "异网用户不存在" });
+  res.json({ deleted: req.params.id });
+});
+
+// 管理员：跨用户异网用户
+api.get("/admin/portin", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String(req.query.uid || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const list = portinFilter(readPortinByUid(uid), req.query.q);
+  res.json({ portin: list, total: list.length, uid });
+});
+
+api.get("/admin/portin/stats", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String(req.query.uid || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  res.json(portinStatsOf(readPortinByUid(uid)));
+});
+
+api.post("/admin/portin", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const r = buildPortinRecord(req.body || {});
+  if (r.error) return res.status(400).json({ error: r.error });
+  r.rec.createdBy = creatorOf(req);
+  const list = readPortinByUid(uid);
+  list.push(r.rec);
+  writePortinByUid(uid, list);
+  res.json({ portin: r.rec });
+});
+
+api.put("/admin/portin/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const list = readPortinByUid(uid);
+  const idx = list.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ error: "异网用户不存在" });
+  const b = req.body || {};
+  const upd = Object.assign({}, list[idx]);
+  ["phone", "familyAddress", "planName", "decider", "operator", "remark", "discount"].forEach((k) => {
+    if (b[k] !== undefined) upd[k] = String(b[k] == null ? "" : b[k]).trim();
+  });
+  if (b.planFee !== undefined) upd.planFee = b.planFee === "" || b.planFee == null ? null : Number(b.planFee);
+  if (!upd.operator && upd.phone) upd.operator = detectOperator(upd.phone) || "";
+  if (!upd.phone) return res.status(400).json({ error: "联系电话为必填项" });
+  list[idx] = upd;
+  writePortinByUid(uid, list);
+  res.json({ portin: upd });
+});
+
+api.delete("/admin/portin/:id", (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const uid = String((req.query && req.query.uid) || "").replace(/[^\w.-]/g, "");
+  if (!uid) return res.status(400).json({ error: "缺少 uid 参数" });
+  const ok = softDeletePortin(req.params.id, uid, creatorOf(req));
+  if (!ok) return res.status(404).json({ error: "异网用户不存在" });
+  res.json({ deleted: req.params.id });
+});
