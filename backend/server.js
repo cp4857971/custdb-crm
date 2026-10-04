@@ -1349,10 +1349,7 @@ api.put("/customers/:id", (req, res) => {
   const list = adm ? readAllCustomers() : readCustomers(req);
   const idx = list.findIndex((c) => c.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: "客户不存在" });
-  const a = req.auth || {};
-  if (adm && !a.isSuper && String(list[idx].createdBy || "") !== creatorOf(req)) {
-    return res.status(403).json({ error: "仅可编辑自己添加的数据（自建数据）；其他用户添加的数据如需修改请联系超级管理员" });
-  }
+  const a = req.auth || {}; // v0.0.33：管理员可编辑全库资料（不再限自建）
   const b = req.body || {};
   const _ce = b.contractEnd == null ? "" : String(b.contractEnd).trim();
   if (_ce !== "" && !DATE_RE.test(_ce)) {
@@ -1385,9 +1382,7 @@ api.delete("/customers/:id", (req, res) => {
   if (adminLike(req)) {
     const row = sqliteGet().prepare("SELECT * FROM customers WHERE id=?").get(req.params.id);
     if (!row) return res.status(404).json({ error: "客户不存在" });
-    if (!a.isSuper && String(row.createdBy || "") !== creatorOf(req)) {
-      return res.status(403).json({ error: "仅可删除自己添加的数据（自建数据）；其他用户添加的数据如需删除请联系超级管理员" });
-    }
+    // v0.0.33：管理员/超管可删除全库资料（不再限自建）；删除进回收站，超管可恢复
     const ok = softDeleteCustomer(row.id, row.user, creatorOf(req));
     if (!ok) return res.status(404).json({ error: "客户不存在" });
     return res.json({ deleted: row.id, toRecycle: true });
@@ -1627,10 +1622,7 @@ api.put("/portin/:id", (req, res) => {
   const list = adm ? readAllPortin() : readPortin(req);
   const idx = list.findIndex((c) => c.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: "异网用户不存在" });
-  const a = req.auth || {};
-  if (adm && !a.isSuper && String(list[idx].createdBy || "") !== creatorOf(req)) {
-    return res.status(403).json({ error: "仅可编辑自己添加的数据（自建数据）；其他用户添加的数据如需修改请联系超级管理员" });
-  }
+  const a = req.auth || {}; // v0.0.33：管理员可编辑全库资料（不再限自建）
   const b = req.body || {};
   const upd = Object.assign({}, list[idx]);
   ["phone", "familyAddress", "planName", "decider", "operator", "remark", "discount"].forEach((k) => {
@@ -1659,9 +1651,7 @@ api.delete("/portin/:id", (req, res) => {
   if (adminLike(req)) {
     const row = sqliteGet().prepare("SELECT * FROM portin WHERE id=?").get(req.params.id);
     if (!row) return res.status(404).json({ error: "异网用户不存在" });
-    if (!a.isSuper && String(row.createdBy || "") !== creatorOf(req)) {
-      return res.status(403).json({ error: "仅可删除自己添加的数据（自建数据）；其他用户添加的数据如需删除请联系超级管理员" });
-    }
+    // v0.0.33：管理员/超管可删除全库资料（不再限自建）；删除进回收站，超管可恢复
     const ok = softDeletePortin(row.id, row.user, creatorOf(req));
     if (!ok) return res.status(404).json({ error: "异网用户不存在" });
     return res.json({ deleted: row.id, toRecycle: true });
