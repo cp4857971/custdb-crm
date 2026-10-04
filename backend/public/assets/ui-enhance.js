@@ -1,12 +1,13 @@
-/* ui-enhance.js —— 全站视图统一优化（v0.0.41）+ 视图再优化（v0.0.42）
+/* ui-enhance.js —— 全站视图统一优化（v0.0.41）+ 视图再优化（v0.0.42）+ 蓝色收敛（v0.0.43）
  * 覆盖：管理控制台（super.html）/ 授权导出中心（export-center.html）/ 主页（index.html 顶栏统计）
  * v0.0.41 方向：整体风格（渐变顶栏/卡片/按钮统一）· 信息密度（表格紧凑）· 关键信息突出（状态徽标/过期行）· 操作便捷（触控/反馈）
  * v0.0.42 追加：登录页精致化 · 输入框/选择框焦点态统一 · 弹窗与提示条层次 · 统计数字卡突出 · 滚动条/空状态/页面背景
+ * v0.0.43 追加：蓝色收敛 —— 顶栏/统计卡大面积深蓝渐变改浅色底，蓝色仅作文字/按钮/徽标点缀，视觉更轻盈
  * 注入式增强：仅追加样式与 DOM 增强，不改业务逻辑，与 view-enhance.js / print-table.js 互不影响。
  */
 (function () {
   "use strict";
-  var STYLE_ID = "ui-enhance-v042";
+  var STYLE_ID = "ui-enhance-v043";
   var CSS = [
     /* ---------- 整体风格：统一设计变量 ---------- */
     ":root{--primary:#17365D;--primary-2:#2B5A8C;--primary-grad:linear-gradient(135deg,#17365D 0%,#2B5A8C 100%);--danger:#C0392B;--ok:#1E7D34;--orange:#E67E22;--yellow:#B45309;--line:#E9EEF4;--radius:12px;--shadow:0 2px 10px rgba(23,54,93,.08)}",
@@ -114,7 +115,33 @@
     "::-webkit-scrollbar-thumb:hover{background:rgba(43,90,140,.45)}",
     "::-webkit-scrollbar-corner{background:transparent}",
     /* 打印时隐藏背景 */
-    "@media print{body{background:#fff!important}}"
+    "@media print{body{background:#fff!important}}",
+    /* ================= v0.0.43 蓝色收敛 ================= */
+    /* ---------- 顶栏：大面积深蓝渐变 → 白底 + 浅蓝分割线（主页 header + 控制台/导出中心 topbar） ---------- */
+    "header.header{background:#fff!important;box-shadow:0 1px 0 #E4EBF3,0 3px 10px rgba(23,54,93,.06)!important;height:auto!important}",
+    "header.header h1{color:var(--primary)!important}",
+    "header.header .subtitle{color:#8294A9!important}",
+    ".head-btns .btn-ghost-dark{background:#fff!important;color:var(--primary)!important;border:1px solid #C9DDF2!important;border-radius:8px!important}",
+    ".head-btns .btn-ghost-dark:hover{background:#F2F7FC!important;transform:translateY(-1px)}",
+    ".conn-pill,.conn-pill.conn-on{background:#E7F5EA!important;color:#1E7D34!important;border:1px solid #C4E6CC!important}",
+    ".view-tabs .view-tab{color:var(--primary)!important}",
+    ".view-tab-active{background:#EAF2FA!important}",
+    ".topbar{background:#fff!important;box-shadow:0 1px 0 #E4EBF3,0 3px 10px rgba(23,54,93,.06)!important}",
+    ".topbar .sub{color:var(--primary)!important}",
+    ".topbar .who{background:#F2F6FB!important;color:var(--primary)!important;border-color:#C9DDF2!important}",
+    ".topbar a,.topbar button{backdrop-filter:none}",
+    /* ---------- 统计卡：渐变大块 → 浅蓝底 + 深蓝数字（收矮） ---------- */
+    ".stat,.stat-num,.stat-card{background:#EAF2FA!important;box-shadow:none!important;padding:10px 14px!important}",
+    ".stat{border:1px solid #D7E5F2!important;border-radius:10px!important;height:78px!important}",
+    ".stat-num b,.stat-card b{color:var(--primary)!important;font-size:22px!important;text-shadow:none!important}",
+    ".stat-num span,.stat-card span,.stat-label{color:#5A6B7E!important}",
+    ".stat-active{border-color:var(--primary-2)!important;background:#F2F7FC!important}",
+    /* ---------- 页签/筛选激活：深蓝底 → 浅蓝底深蓝字（小面积点缀） ---------- */
+    ".chip-btn-active{background:#EAF2FA!important;color:var(--primary)!important}",
+    ".tab.on{background:#EAF2FA!important;color:var(--primary)!important}",
+    ".badge-b{background:#EAF2FA!important}",
+    /* ---------- 主按钮：渐变 → 纯品牌蓝（保留点缀） ---------- */
+    ".btn-primary,.btn-pri{background:var(--primary)!important;background-image:none!important}"
   ].join("");
 
   function ensureStyle() {
