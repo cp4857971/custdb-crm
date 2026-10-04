@@ -76,7 +76,7 @@
 ## 六、安装 / 部署
 
 - **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.38；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
-- **Docker**：`backend/Dockerfile` + `docker-compose.yml`（源码部署，数据卷 `./custdb-data:/data`）。
+- **Docker（v0.0.38）**：`backend/Dockerfile` + `docker-compose.yml`（node:22-slim，含健康检查）——在 `backend/` 目录执行 `docker compose up -d --build` 一键构建启动（或 `docker build -t custdb:0.0.38 .` + `docker run -d --name custdb -p 5001:5001 -v /你的数据目录:/data custdb:0.0.38`）；数据卷 `./custdb-data:/data` 持久化，升级容器不丢数据。
 - **Windows / Linux 服务端**：解压 zip → 运行二进制 → 访问 `http://本机IP:5001/app/custdb`。
 - **安卓**：安装 `CustDbApp-app-debug.apk`，首次启动填写服务器地址。
 - 默认超管 **admin / admin**，登录后请立即修改。
@@ -89,6 +89,8 @@
 backend/
   server.js          # 服务端主程序（Express + node:sqlite，自动加载 server-ext.js）
   server-ext.js      # 四段功能模块（套餐库/导出/超管全库/管理员全库，由 server.js 自动加载）
+  Dockerfile         # Docker 镜像构建（node:22-slim，含健康检查）
+  docker-compose.yml # Docker Compose 一键部署（v0.0.38，数据卷 ./custdb-data:/data）
   public/            # 前端静态页（index.html + assets 打包产物；assets 过大无法经文本通道上传，
                      #   发布包内已内置最新版本，仓库文档提供下载说明）
 docs/

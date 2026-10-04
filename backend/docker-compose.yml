@@ -1,0 +1,15 @@
+# 通信客户资料库（CustDb）· Docker Compose 部署（v0.0.38）
+# 用法（在 backend 目录内执行）：
+#   docker compose up -d --build
+# 访问：http://服务器IP:5001/app/custdb
+# 数据持久化：./custdb-data 目录（custdb.db / config.json，升级容器不丢数据）
+services:
+  custdb:
+    build: .
+    image: custdb:0.0.38
+    container_name: custdb
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./custdb-data:/data
+    restart: unless-stopped
