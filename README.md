@@ -1,7 +1,7 @@
 # 通信客户资料库（CustDb）
 
 > 通信行业客户档案 / 套餐管理 / 协议到期提醒 ｜ fnOS Native 应用 + Docker + 安卓 APP + Windows/Linux 桌面版
-> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.35
+> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.36
 
 ---
 
@@ -26,6 +26,7 @@
 | **v0.0.33 新增** | **正式用户可删除全库资料**（删除进回收站，超管可恢复）；正式用户可创建临时用户并生成导出授权码；可查看每条数据由哪个管理员添加 |
 | **v0.0.34 新增** | **打印视图表格化**：点击「打印」时客户资料以表格输出（正式客户/异网用户均支持），替代原卡片式打印，一页容纳更多客户，适合存档 |
 | **v0.0.35 调整** | **删除页面底部存储/敏感提示说明文字**（「存储：SQLite数据库…请妥善保管」段不再显示） |
+| **v0.0.36 调整** | **正式用户（管理员）主页显示删除选项、显示创建临时用户入口、生成授权码**：正式登录用户（非操作员）自动视为管理员，卡片删除按钮/管理入口/授权导出全部开放；修复管理模态框打开即崩溃（系统设置页签与临时用户入口对管理员可见） |
 | 开发者/发布者（v0.0.22+） | 由 doubao 改为 **cp** |
 
 ---
@@ -72,7 +73,7 @@
 
 ## 六、安装 / 部署
 
-- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.35；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
+- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.36；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
 - **Docker**：`backend/Dockerfile` + `docker-compose.yml`（源码部署，数据卷 `./custdb-data:/data`）。
 - **Windows / Linux 服务端**：解压 zip → 运行二进制 → 访问 `http://本机IP:5001/app/custdb`。
 - **安卓**：安装 `CustDbApp-app-debug.apk`，首次启动填写服务器地址。
@@ -89,8 +90,8 @@ backend/
   public/            # 前端静态页（index.html + assets 打包产物；assets 过大无法经文本通道上传，
                      #   发布包内已内置最新版本，仓库文档提供下载说明）
 docs/
-  docs_v0.0.35-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
-  docs_v0.0.30-更新内容.md   # 上一版更新说明
+  docs_v0.0.36-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
+  docs_v0.0.35-更新内容.md   # 上一版更新说明
 mobile/
   CustDbApp/         # 安卓 APP（Android Studio 工程，WebView 壳）
 desktop/             # Windows / Linux 客户端（Electron 独立窗口版）
@@ -98,12 +99,12 @@ desktop/             # Windows / Linux 客户端（Electron 独立窗口版）
 
 ---
 
-## 八、发布包（v0.0.35）
+## 八、发布包（v0.0.36）
 
 | 文件 | MD5 |
 | --- | --- |
-| custdb.fpk（fnOS 应用包） | 34796fbb0ac04b3f03ff60a8471f37ae |
-| custdb-server-linux-x64.zip | 687eb068161563d82668395833acee42 |
-| custdb-server-win-x64.zip | 67454d66f3865c98b15e402fbdc4a749 |
+| custdb.fpk（fnOS 应用包） | 34874b8c775b38cabf53fdb7bf2e9557 |
+| custdb-server-linux-x64.zip | 15f2cdb2b9a1c4b2083a828282a19125 |
+| custdb-server-win-x64.zip | c936d893d252c941480b4d3501257000 |
 
-详细更新内容与校验见 `docs/docs_v0.0.35-更新内容.md`。
+详细更新内容与校验见 `docs/docs_v0.0.36-更新内容.md`。
