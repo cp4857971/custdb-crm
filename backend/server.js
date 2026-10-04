@@ -299,34 +299,35 @@ function storageInfo() {
   };
 }
 
-const SEED = [
-  { id: "KH-2026-001", name: "王秀英", phone: "13800001234", idAddress: "四川省泸州市合江县XX镇XX村X社", installAddress: "四川省泸州市合江县XX街道XX小区X栋X单元", planName: "家庭融合宽带套餐", planFee: 129, addonServices: "视频彩铃、家庭云盘", operator: "中国移动", remark: "老客户，宽带2026-09已到期，待续费回访", discount: "95折", contractStart: "2024-10-01", contractEnd: "2026-09-15", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-002", name: "李建国", phone: "13900005678", idAddress: "四川省泸州市合江县XX街道XX路X号", installAddress: "四川省泸州市合江县XX镇XX街XX号", planName: "5G畅享套餐", planFee: 99, addonServices: "腾讯视频会员", operator: "中国移动", remark: "协议10月到期，主推5G融合套餐", discount: "8折", contractStart: "2024-10-10", contractEnd: "2026-10-10", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-003", name: "张桂芳", phone: "13600009876", idAddress: "四川省泸州市合江县XX乡XX村X组", installAddress: "四川省泸州市合江县XX小区X栋X单元", planName: "5G融合家庭套餐", planFee: 159, addonServices: "宽带提速包、视频彩铃", operator: "中国联通", remark: "", discount: "9折", contractStart: "2024-11-01", contractEnd: "2026-11-01", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-004", name: "刘德明", phone: "13700004567", idAddress: "四川省泸州市合江县XX镇XX村X社", installAddress: "四川省泸州市合江县XX路XX号", planName: "手机流量畅享套餐", planFee: 59, addonServices: "亲情网、骚扰拦截", operator: "中国联通", remark: "有意向办理家庭宽带", discount: "", contractStart: "2025-01-15", contractEnd: "2027-01-15", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-005", name: "陈秀兰", phone: "15000001234", idAddress: "四川省泸州市合江县XX街道XX小区", installAddress: "四川省泸州市合江县XX街道XX小区X栋", planName: "宽带+手机融合套餐", planFee: 199, addonServices: "家庭云盘、视频会员", operator: "中国电信", remark: "存量电信号码，关注小业务叠加", discount: "95折", contractStart: "2025-03-01", contractEnd: "2027-03-01", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-006", name: "杨志强", phone: "15100007890", idAddress: "四川省泸州市合江县XX镇XX街X号", installAddress: "四川省泸州市合江县XX小区X栋X单元", planName: "5G畅享套餐（尊享版）", planFee: 139, addonServices: "视频彩铃", operator: "中国电信", remark: "", discount: "免月租", contractStart: "2025-05-20", contractEnd: "2027-05-20", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-007", name: "赵春花", phone: "15200004567", idAddress: "四川省泸州市合江县XX乡XX村X组", installAddress: "四川省泸州市合江县XX镇XX路XX号", planName: "学生青春卡套餐", planFee: 29, addonServices: "校园流量包", operator: "中国电信", remark: "", discount: "", contractStart: "2025-09-01", contractEnd: "2027-09-01", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-008", name: "孙红军", phone: "15300001234", idAddress: "四川省泸州市合江县XX街道XX路X号", installAddress: "四川省泸州市合江县XX小区X栋", planName: "家庭融合套餐（千兆版）", planFee: 169, addonServices: "千兆提速包、视频彩铃", operator: "中国联通", remark: "协议11月到期", discount: "9折", contractStart: "2025-11-11", contractEnd: "2027-11-11", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-009", name: "周晓梅", phone: "15500007890", idAddress: "四川省泸州市合江县XX镇XX村X社", installAddress: "四川省泸州市合江县XX街XX号", planName: "5G畅享套餐", planFee: 99, addonServices: "来电管家、家庭云盘", operator: "中国移动", remark: "", discount: "8折", contractStart: "2023-12-01", contractEnd: "2026-10-25", createdAt: "2026-09-30T00:00:00.000Z" },
-  { id: "KH-2026-010", name: "吴国栋", phone: "15600004567", idAddress: "四川省泸州市合江县XX乡XX村X组", installAddress: "四川省泸州市合江县XX路XX号", planName: "宽带融合套餐", planFee: 189, addonServices: "视频会员、亲情网", operator: "中国联通", remark: "视频会员赠送已结束，可复推", discount: "95折", contractStart: "2026-01-01", contractEnd: "2028-01-01", createdAt: "2026-09-30T00:00:00.000Z" },
+// 示例数据治理（v0.0.27.1）：不再自动注入示例数据；启动时自动清理历史版本注入的示例记录，
+// 使全库视图只展示真实客户资料。清理条件：固定示例 ID（KH-2026-001~010）且 createdBy='system'，
+// 双重校验避免误删用户真实数据；示例记录连回收站一并清除（虚构数据无需保留）。
+const SEED_IDS = [
+  "KH-2026-001", "KH-2026-002", "KH-2026-003", "KH-2026-004", "KH-2026-005",
+  "KH-2026-006", "KH-2026-007", "KH-2026-008", "KH-2026-009", "KH-2026-010"
 ];
 
-function seedIfEmpty() {
+function cleanupSeedData() {
   const db = sqliteGet();
-  const c = db.prepare("SELECT COUNT(*) AS n FROM customers WHERE user=?").get("local");
-  if (!c.n) {
-    const ins = db.prepare(
-      "INSERT INTO customers (id,user,name,phone,idAddress,installAddress,planName,planFee,addonServices,operator,remark,discount,contractStart,contractEnd,createdAt,createdBy) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    );
-    for (const s of SEED) {
-      ins.run(s.id, "local", s.name, s.phone, s.idAddress, s.installAddress, s.planName, s.planFee, s.addonServices, s.operator || "", s.remark || "", s.discount || "", s.contractStart, s.contractEnd, s.createdAt, "system");
+  db.exec("BEGIN");
+  try {
+    const delC = db.prepare("DELETE FROM customers WHERE id=? AND createdBy='system'");
+    const delD = db.prepare("DELETE FROM deleted_customers WHERE id=? AND createdBy='system'");
+    for (const id of SEED_IDS) {
+      delC.run(id);
+      delD.run(id);
     }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
   }
 }
-seedIfEmpty();
+cleanupSeedData();
 
+// ---------------- 套餐业务库 / 小业务库（v0.0.23） ----------------
+// 内置四川省内常见资费参考（家庭融合 / E家融合 / 单卡），管理员可增删自定义项
 const BUILTIN_PLANS = [
+  // 中国移动 —— 家庭融合
   { name: "全家享融合套餐 99元", category: "家庭融合", fee: 99, operator: "中国移动" },
   { name: "全家享融合套餐 129元", category: "家庭融合", fee: 129, operator: "中国移动" },
   { name: "全家享融合套餐 169元", category: "家庭融合", fee: 169, operator: "中国移动" },
