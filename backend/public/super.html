@@ -179,7 +179,6 @@
   }
 
   function init() {
-    // 用 /admin/status 判定角色（管理员 / 超级管理员）
     api("/admin/status").then(function (j) {
       if (j._status === 401) { renderLogin(); return; }
       if (!j.isAdmin && !j.isSuper) {
@@ -251,7 +250,7 @@
     var tabs = [["customers", "全部客户数据"], ["portin", "全部异网用户"]];
     if (me.isSuper) tabs.push(["deleted", "回收站"]);
     return '<div class="tabs">' + tabs.map(function (t) {
-      return '<button class="tab' + (state.tab === t[0] ? " on" : "") + '" data-tab="' + t[0] + '" onclick="setTab(\'' + t[0] + "')">" + t[1] + "</button>";
+      return '<button class="tab' + (state.tab === t[0] ? " on" : "") + '" data-tab="' + t[0] + '" onclick="setTab(\'' + t[0] + "')\">" + t[1] + "</button>";
     }).join("") + "</div>";
   }
 
@@ -287,7 +286,7 @@
           "</td><td>" + esc(c.addonServices) + "</td><td>" + esc(c.contractEnd) + "</td><td>" + statusBadge(c.status) +
           "</td><td>" + (c.daysLeft == null ? '<span class="muted">—</span>' : esc(c.daysLeft)) + "</td><td>" + esc(c.remark) + "</td>" +
           (me.isSuper ? "" : "<td>" + (isOwn(c)
-            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'customers\',\'' + esc(c.id) + "')">删除</button>"
+            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'customers\',\'' + esc(c.id) + "')\">删除</button>"
             : '<span class="muted" title="仅可删除自己添加的数据">他人数据</span>') + "</td>") +
           "</tr>";
       }).join("");
@@ -317,7 +316,7 @@
           "</td><td>" + esc(c.familyAddress) + "</td><td>" + esc(c.operator) + "</td><td>" + esc(c.planName) +
           "</td><td>" + (c.planFee == null ? '<span class="muted">—</span>' : esc(c.planFee)) + "</td><td>" + esc(c.decider) + "</td><td>" + esc(c.remark) + "</td>" +
           (me.isSuper ? "" : "<td>" + (isOwn(c)
-            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'portin\',\'' + esc(c.id) + "')">删除</button>"
+            ? '<button class="btn btn-danger btn-sm" onclick="delOwn(\'portin\',\'' + esc(c.id) + "')\">删除</button>"
             : '<span class="muted" title="仅可删除自己添加的数据">他人数据</span>') + "</td>") +
           "</tr>";
       }).join("");
@@ -354,8 +353,8 @@
         return "<tr><td>" + (isC ? '<span class="badge badge-b">客户</span>' : '<span class="badge">异网用户</span>') +
           "</td><td>" + creatorLabel(c) + "</td><td>" + ownerLabel(c.user) + "</td><td>" + esc(main) +
           "</td><td>" + esc(delAt) + "</td><td>" + esc(c.deletedBy || "—") + "</td><td>" +
-          '<button class="btn btn-pri btn-sm" onclick="restore(\'' + esc(c.type) + "','" + esc(c.id) + "')">恢复</button> " +
-          '<button class="btn btn-danger btn-sm" onclick="purge(\'' + esc(c.type) + "','" + esc(c.id) + "')">彻底删除</button></td></tr>";
+          '<button class="btn btn-pri btn-sm" onclick="restore(\'' + esc(c.type) + "','" + esc(c.id) + "')\">恢复</button> " +
+          '<button class="btn btn-danger btn-sm" onclick="purge(\'' + esc(c.type) + "','" + esc(c.id) + "')\">彻底删除</button></td></tr>";
       }).join("");
     });
   }
@@ -376,7 +375,6 @@
     });
   };
 
-  // 管理员删除自建数据（软删除进回收站，超级管理员可恢复）
   window.delOwn = function (type, id) {
     if (!confirm("确认删除这条数据？删除后进入回收站，超级管理员可恢复。")) return;
     api("/admin/all-" + type + "/" + encodeURIComponent(id), { method: "DELETE" }).then(function (j) {
@@ -385,7 +383,6 @@
     });
   };
 
-  // 首次进入：已有超管 token 则直接进入控制台，否则显示登录
   var token = localStorage.getItem(tokenKey);
   if (token) {
     init();
@@ -394,5 +391,7 @@
   }
 })();
 </script>
+<script src="/app/custdb/assets/ui-enhance.js"></script>
+
 </body>
 </html>
