@@ -595,9 +595,9 @@ function normalizeDate(v) {
   }
   const s = String(v).trim();
   if (DATE_RE.test(s)) return s;
-  let m = s.match(/^(\d{4})[年\-/.](\d{1,2})[月\-/.](\d{1,2})日?$/);
+  let m = s.match(/^(\d{4})[年\-/.]*(\d{1,2})[月\-/.]*(\d{1,2})日?$/);
   if (m) return m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
-  m = s.match(/^(\d{1,2})[月\-/.](\d{1,2})[日\-/.](\d{4})$/);
+  m = s.match(/^(\d{1,2})[月\-/.]*(\d{1,2})[日\-/.]*(\d{4})$/);
   if (m) return m[3] + "-" + m[1].padStart(2, "0") + "-" + m[2].padStart(2, "0");
   if (/^\d+(\.\d+)?$/.test(s) && Number(s) > 20000 && Number(s) < 60000) {
     const d = excelSerialToDate(Number(s));
@@ -1090,11 +1090,14 @@ api.post("/admin/super-password", (req, res) => {
 });
 
 api.get("/admin/temp-users", (req, res) => {
-  if (!requireSuper(req, res)) return;
+  if (!requireAdmin(req, res)) return;
+  const me = creatorOf(req);
+  const isSuper = !!(req.auth && req.auth.isSuper);
   const now = Date.now();
-  const list = AUTH.tempUsers
+  const mine = AUTH.tempUsers.filter((t) => (isSuper ? true : String(t.createdBy || "") === me));
+  const list = mine
     .filter((t) => new Date(t.expireAt).getTime() >= now)
-    .map((t) => ({ username: t.username, uid: t.uid, expireAt: t.expireAt, note: t.note || "", createdAt: t.createdAt }));
+    .map((t) => ({ username: t.username, uid: t.uid, expireAt: t.expireAt, note: t.note || "", createdBy: t.createdBy || "", createdAt: t.createdAt }));
   const expired = AUTH.tempUsers.filter((t) => new Date(t.expireAt).getTime() < now);
   if (expired.length) {
     AUTH.tempUsers = AUTH.tempUsers.filter((t) => new Date(t.expireAt).getTime() >= now);
@@ -1104,7 +1107,7 @@ api.get("/admin/temp-users", (req, res) => {
 });
 
 api.post("/admin/temp-users", (req, res) => {
-  if (!requireSuper(req, res)) return;
+  if (!requireAdmin(req, res)) return;
   const username = String((req.body && req.body.username) || "").replace(/[^\w.-]/g, "").trim();
   const password = String((req.body && req.body.password) || "");
   const uid = String((req.body && req.body.uid) || "").replace(/[^\w.-]/g, "").trim() || username;
@@ -1124,18 +1127,23 @@ api.post("/admin/temp-users", (req, res) => {
     uid,
     expireAt,
     note,
+    createdBy: creatorOf(req),
     createdAt: new Date().toISOString()
   });
   saveAuth();
-  res.json({ ok: true, user: { username, uid, expireAt, note } });
+  res.json({ ok: true, user: { username, uid, expireAt, note, createdBy: creatorOf(req) } });
 });
 
 api.delete("/admin/temp-users/:username", (req, res) => {
-  if (!requireSuper(req, res)) return;
+  if (!requireAdmin(req, res)) return;
   const username = String(req.params.username || "").replace(/[^\w.-]/g, "").trim();
-  const before = AUTH.tempUsers.length;
+  const target = AUTH.tempUsers.find((t) => t.username === username);
+  if (!target) return res.status(404).json({ error: "临时用户不存在" });
+  const isSuper = !!(req.auth && req.auth.isSuper);
+  if (!isSuper && String(target.createdBy || "") !== creatorOf(req)) {
+    return res.status(403).json({ error: "仅可删除自己创建的临时用户" });
+  }
   AUTH.tempUsers = AUTH.tempUsers.filter((t) => t.username !== username);
-  if (AUTH.tempUsers.length === before) return res.status(404).json({ error: "临时用户不存在" });
   saveAuth();
   res.json({ ok: true, deleted: username });
 });
