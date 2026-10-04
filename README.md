@@ -102,7 +102,7 @@ desktop/             # Windows / Linux 客户端（Electron 独立窗口版）
 
 | 文件 | MD5 |
 | --- | --- |
-| custdb.fpk（fnOS 应用包） | dfdcdf20a6ff3c8af726e4ee94de5780 |
+| custdb.fpk（fnOS 应用包） | 34796fbb0ac04b3f03ff60a8471f37ae |
 | custdb-server-linux-x64.zip | 687eb068161563d82668395833acee42 |
 | custdb-server-win-x64.zip | 67454d66f3865c98b15e402fbdc4a749 |
 
