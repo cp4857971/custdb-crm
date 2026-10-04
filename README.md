@@ -1,7 +1,7 @@
 # 通信客户资料库（CustDb）
 
 > 通信行业客户档案 / 套餐管理 / 协议到期提醒 ｜ fnOS Native 应用 + Docker + 安卓 APP + Windows/Linux 桌面版
-> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.38
+> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.39
 
 ---
 
@@ -29,6 +29,7 @@
 | **v0.0.36 调整** | **正式用户（管理员）主页显示删除选项、显示创建临时用户入口、生成授权码**：正式登录用户（非操作员）自动视为管理员，卡片删除按钮/管理入口/授权导出全部开放；修复管理模态框打开即崩溃（系统设置页签与临时用户入口对管理员可见） |
 | **v0.0.37 调整** | **正式用户（管理员）仅可删除自建资料、可查看全库资料**：删除权限从 v0.0.33 的「删全库」收紧为「仅可删除自己添加的数据」（createdBy=自己，他人/导入数据 403），全库查看保持；超管仍可删除任意资料并恢复回收站 |
 | **v0.0.38 调整** | **删除套餐业务库**：新增/编辑客户（正式客户、异网用户）时套餐名称、小业务恢复为**纯手动输入**（不再弹出下拉选项）；管理后台移除「套餐业务库」页签（五页签→四页签：用户管理/套餐统计/协议统计/系统设置） |
+| **v0.0.39 调整** | **主页客户列表视图优化 + 按协议到期排序**：卡片列数自适应（大屏 4 列/桌面 3 列/平板 2 列/手机单列）、卡片紧凑、剩余天数徽标化、电话行高亮点按、操作按钮等宽加大（手机端 44px 触控）；正式客户列表按协议到期日期排前（已到期→30 天→60 天→正常升序，未设置排最后） |
 | 开发者/发布者（v0.0.22+） | 由 doubao 改为 **cp** |
 
 ---
@@ -75,8 +76,8 @@
 
 ## 六、安装 / 部署
 
-- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.38；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
-- **Docker（v0.0.38）**：`backend/Dockerfile` + `docker-compose.yml`（node:22-slim，含健康检查）——在 `backend/` 目录执行 `docker compose up -d --build` 一键构建启动（或 `docker build -t custdb:0.0.38 .` + `docker run -d --name custdb -p 5001:5001 -v /你的数据目录:/data custdb:0.0.38`）；数据卷 `./custdb-data:/data` 持久化，升级容器不丢数据。
+- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.39；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
+- **Docker（v0.0.39）**：`backend/Dockerfile` + `docker-compose.yml`（node:22-slim，含健康检查）——在 `backend/` 目录执行 `docker compose up -d --build` 一键构建启动（或 `docker build -t custdb:0.0.39 .` + `docker run -d --name custdb -p 5001:5001 -v /你的数据目录:/data custdb:0.0.39`）；数据卷 `./custdb-data:/data` 持久化，升级容器不丢数据。
 - **Windows / Linux 服务端**：解压 zip → 运行二进制 → 访问 `http://本机IP:5001/app/custdb`。
 - **安卓**：安装 `CustDbApp-app-debug.apk`，首次启动填写服务器地址。
 - 默认超管 **admin / admin**，登录后请立即修改。
@@ -90,11 +91,11 @@ backend/
   server.js          # 服务端主程序（Express + node:sqlite，自动加载 server-ext.js）
   server-ext.js      # 四段功能模块（套餐库/导出/超管全库/管理员全库，由 server.js 自动加载）
   Dockerfile         # Docker 镜像构建（node:22-slim，含健康检查）
-  docker-compose.yml # Docker Compose 一键部署（v0.0.38，数据卷 ./custdb-data:/data）
+  docker-compose.yml # Docker Compose 一键部署（v0.0.39，数据卷 ./custdb-data:/data）
   public/            # 前端静态页（index.html + assets 打包产物；assets 过大无法经文本通道上传，
                      #   发布包内已内置最新版本，仓库文档提供下载说明）
 docs/
-  docs_v0.0.38-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
+  docs_v0.0.39-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
   docs_v0.0.37-更新内容.md   # 上一版更新说明
 mobile/
   CustDbApp/         # 安卓 APP（Android Studio 工程，WebView 壳）
@@ -103,12 +104,12 @@ desktop/             # Windows / Linux 客户端（Electron 独立窗口版）
 
 ---
 
-## 八、发布包（v0.0.38）
+## 八、发布包（v0.0.39）
 
 | 文件 | MD5 |
 | --- | --- |
-| custdb.fpk（fnOS 应用包） | 8387813c771983c13c641b23a036f10c |
-| custdb-server-linux-x64.zip | 0148c8376abae06beed5b65209c9879b |
-| custdb-server-win-x64.zip | b280ef728e032adaca9eaaf05e05da3a |
+| custdb.fpk（fnOS 应用包） | 4e48bdcc93eb1a262a4a373aa66cffb3 |
+| custdb-server-linux-x64.zip | a1e8605d0fe79e1cf83aa01853d1341b |
+| custdb-server-win-x64.zip | b7b54c993a1e7e4bb460c0e123021180 |
 
-详细更新内容与校验见 `docs/docs_v0.0.38-更新内容.md`。
+详细更新内容与校验见 `docs/docs_v0.0.39-更新内容.md`。
