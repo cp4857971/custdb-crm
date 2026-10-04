@@ -54,10 +54,10 @@
 - 手机浏览器访问系统后，可「添加到主屏幕」生成桌面图标（PWA）；也可安装独立 APK（`mobile/CustDbApp` Android Studio 工程，WebView 壳，零第三方依赖）。
 - APP 内可设置服务器地址，随时切换/重连；与服务端共用同一套账号与数据。
 
-## 五、Windows / Linux 桌面版（EXE，v0.0.23，v0.0.27 已重建更新）
+## 五、Windows / Linux 桌面版（v0.0.27）
 
 - **服务端**：单文件二进制（Windows x64 / Linux x64，Node 22 内置 SQLite，零依赖）；数据存二进制旁 `custdb-data/`；静态页从二进制旁 `web/` 读取。
-- **客户端**：桌面启动器（win / linux），双击即可打开系统页面。
+- **客户端（独立窗口根治版，v0.0.27）**：Electron 独立窗口程序，双击直接弹出程序窗口（不依赖外部浏览器）；配置服务器地址后内嵌加载服务端界面，连接失败自动进入服务器设置页，可改地址重连或用系统浏览器打开兜底；同目录 `client-config.json` 配置 `{"server":"http://服务器IP:5001/app/custdb"}`。Windows 另有**单文件自解压 EXE**（双击解压即用，保留已保存的服务器地址）。
 - 与 fnOS / Docker / 安卓 APP **互通互联**：同一份数据、同一套界面接口。
 
 ## 六、安装 / 部署
@@ -74,7 +74,8 @@
 
 ```
 backend/
-  server.js          # 服务端（Express + node:sqlite，单文件）
+  server.js          # 服务端主程序（Express + node:sqlite，自动加载 server-ext.js）
+  server-ext.js      # 四段功能模块（套餐库/导出/超管全库/管理员全库，由 server.js 自动加载）
   public/            # 前端（index.html / super.html / export-center.html + assets）
   Dockerfile         # Docker 部署
   docker-compose.yml
