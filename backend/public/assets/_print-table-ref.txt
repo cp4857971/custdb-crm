@@ -1,0 +1,2 @@
+<!-- v0.0.34：打印视图表格化（打印时把客户卡片转为表格，打印后移除） -->
+    <script src="/app/custdb/assets/print-table.js"></script>
