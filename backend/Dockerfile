@@ -16,9 +16,9 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     SOCKET_PATH=""
 
-# 先装依赖（利用层缓存）
+# 先装依赖（利用层缓存；npm install 兼容 lock 缺失/简化的场景）
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org
+RUN npm install --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org
 
 # 后端源码 + 前端静态产物
 COPY server.js ./
