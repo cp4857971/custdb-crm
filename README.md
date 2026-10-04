@@ -1,7 +1,7 @@
 # 通信客户资料库（CustDb）
 
 > 通信行业客户档案 / 套餐管理 / 协议到期提醒 ｜ fnOS Native 应用 + Docker + 安卓 APP + Windows/Linux 桌面版
-> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.42
+> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.43
 
 ---
 
@@ -32,6 +32,7 @@
 | **v0.0.39 调整** | **主页客户列表视图优化 + 按协议到期排序**：卡片列数自适应（大屏 4 列/桌面 3 列/平板 2 列/手机单列）、卡片紧凑、剩余天数徽标化、电话行高亮点按、操作按钮等宽加大（手机端 44px 触控）；正式客户列表按协议到期日期排前（已到期→30 天→60 天→正常升序，未设置排最后） |
 | **v0.0.41 调整** | **全站视图统一优化**：管理控制台/导出中心/主页整体风格（深蓝渐变顶栏、卡片与按钮统一圆角阴影）、信息密度（表格紧凑+表头吸顶+斑马纹）、关键信息突出（状态徽标圆点、已到期行整行红底、30 天行橙标）、操作便捷（按钮交互反馈、手机端触控加大）；新增注入式增强脚本 ui-enhance.js，后端无改动 |
 | **v0.0.42 调整** | **全站视图再优化**：登录页精致化（渐变头+18px 圆角登录卡）、输入框/选择框焦点态统一（蓝色描边+光环）、弹窗渐变标题栏、统计数字卡深蓝渐变白字、滚动条美化、空状态图形化、页面浅蓝光晕背景；ui-enhance.js 升级，后端无改动 |
+| **v0.0.43 调整** | **蓝色收敛**：顶栏/统计卡大面积深蓝渐变改浅色底（顶栏白底+浅蓝分割线、统计卡浅蓝底+22px 深蓝数字+收矮至 78px），蓝色仅作文字/按钮/徽标/激活态点缀；主按钮保留纯品牌蓝；ui-enhance.js 升级，后端无改动 |
 | **v0.0.40 调整** | **联系电话可直接复制（保留拨打电话）**：卡片电话行新增「复制」按钮，点击一键复制号码、变绿提示「已复制」1.5 秒；号码本身仍可点击拨打；手机端加大触控 |
 | 开发者/发布者（v0.0.22+） | 由 doubao 改为 **cp** |
 
@@ -79,8 +80,8 @@
 
 ## 六、安装 / 部署
 
-- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.42；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
-- **Docker（v0.0.42）**：`backend/Dockerfile` + `docker-compose.yml`（node:22-slim，含健康检查）——在 `backend/` 目录执行 `docker compose up -d --build` 一键构建启动（或 `docker build -t custdb:0.0.42 .` + `docker run -d --name custdb -p 5001:5001 -v /你的数据目录:/data custdb:0.0.42`）；数据卷 `./custdb-data:/data` 持久化，升级容器不丢数据。
+- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.43；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
+- **Docker（v0.0.43）**：`backend/Dockerfile` + `docker-compose.yml`（node:22-slim，含健康检查）——在 `backend/` 目录执行 `docker compose up -d --build` 一键构建启动（或 `docker build -t custdb:0.0.43 .` + `docker run -d --name custdb -p 5001:5001 -v /你的数据目录:/data custdb:0.0.43`）；数据卷 `./custdb-data:/data` 持久化，升级容器不丢数据。
 - **Windows / Linux 服务端**：解压 zip → 运行二进制 → 访问 `http://本机IP:5001/app/custdb`。
 - **安卓**：安装 `CustDbApp-app-debug.apk`，首次启动填写服务器地址。
 - 默认超管 **admin / admin**，登录后请立即修改。
@@ -96,7 +97,7 @@ backend/
   public/            # 前端静态页（index.html + assets 打包产物；assets 过大无法经文本通道上传，
                      #   发布包内已内置最新版本，仓库文档提供下载说明）
 docs/
-  docs_v0.0.40-更新内容.md / docs_v0.0.41-更新内容.md / docs_v0.0.42-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
+  docs_v0.0.40-更新内容.md / docs_v0.0.41-更新内容.md / docs_v0.0.42-更新内容.md / docs_v0.0.43-更新内容.md   # 版本更新说明（含各包 MD5 校验值）
   docs_v0.0.37-更新内容.md   # 上一版更新说明
 mobile/
   CustDbApp/         # 安卓 APP（Android Studio 工程，WebView 壳）
@@ -105,12 +106,12 @@ desktop/             # Windows / Linux 客户端（Electron 独立窗口版）
 
 ---
 
-## 八、发布包（v0.0.42）
+## 八、发布包（v0.0.43）
 
 | 文件 | MD5 |
 | --- | --- |
-| custdb.fpk（fnOS 应用包） | 66ce1714b1a8c853ac31bfe608651289 |
-| custdb-server-linux-x64.zip | 7347a8616bca843e28b1e3f63b2864e0 |
-| custdb-server-win-x64.zip | c573fed4e519529377fa037df8eda9b8 |
+| custdb.fpk（fnOS 应用包） | 86393a586e0d85ca50dc6cca2b2e3ed2 |
+| custdb-server-linux-x64.zip | a2efcc4361bcc909e0f79866acef4228 |
+| custdb-server-win-x64.zip | 739e3db229c94408209cc8f476730c67 |
 
-详细更新内容与校验见 `docs/docs_v0.0.42-更新内容.md`。
+详细更新内容与校验见 `docs/docs_v0.0.43-更新内容.md`。
