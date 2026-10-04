@@ -1,4 +1,4 @@
-# 通信客户资料库（CustDb）· Docker Compose 部署（v0.0.40）
+# 通信客户资料库（CustDb）· Docker Compose 部署（v0.0.41）
 # 用法（在 backend 目录内执行）：
 #   docker compose up -d --build
 # 访问：http://服务器IP:5001/app/custdb
@@ -6,7 +6,7 @@
 services:
   custdb:
     build: .
-    image: custdb:0.0.40
+    image: custdb:0.0.41
     container_name: custdb
     ports:
       - "5001:5001"
