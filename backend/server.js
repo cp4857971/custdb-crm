@@ -1719,6 +1719,8 @@ api.delete("/admin/portin/:id", (req, res) => {
   res.json({ deleted: req.params.id });
 });
 
+require("./server-ext")({api,XLSX,crypto,sqliteGet,requireAdmin,requireSuper,creatorOf,isTempUser,activeExportCodes,writeExportCodes,readExportCodes,detectOperator,decorate,readAllCustomers,readAllPortin,deletedCustomersRows,deletedPortinRows,softDeleteCustomer,softDeletePortin,readCustomersByUid,writeCustomersByUid,readPortinByUid,writePortinByUid,isAdminUser,userOf,readCustomers,readPortin});
+
 app.use(GATEWAY_PREFIX + "/api", api);
 
 app.use(GATEWAY_PREFIX + "/api", (err, req, res, next) => {
