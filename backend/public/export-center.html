@@ -201,7 +201,7 @@
         codes.map(function (c) {
           return "<tr><td class=\"code-chip\">" + esc(c.code) + "</td><td>" + esc(c.note || "—") + "</td><td>" +
             esc(new Date(c.expireAt).toLocaleString("zh-CN")) + "</td><td>" + esc(c.createdBy || "—") + "</td><td>" +
-            '<button class="btn btn-danger btn-sm" onclick="revokeCode(\'' + esc(c.code) + "')">作废</button></td></tr>";
+            '<button class="btn btn-danger btn-sm" onclick="revokeCode(\'' + esc(c.code) + "')\">作废</button></td></tr>";
         }).join("") + "</tbody></table>";
     });
   }
@@ -269,5 +269,7 @@
   if (localStorage.getItem(tokenKey)) init(); else renderLogin();
 })();
 </script>
+<script src="/app/custdb/assets/ui-enhance.js"></script>
+
 </body>
 </html>
