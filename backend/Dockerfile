@@ -1,10 +1,10 @@
 # ============================================================
-# 通信客户资料库 v0.0.40 · Docker 镜像
+# 通信客户资料库 v0.0.42 · Docker 镜像
 # 构建（在 backend 目录内执行，或使用部署包脚本）：
-#   docker build -t custdb:0.0.40 .
+#   docker build -t custdb:0.0.42 .
 # 运行：
 #   docker run -d --name custdb -p 5001:5001 \
-#     -v /你的数据目录:/data custdb:0.0.40
+#     -v /你的数据目录:/data custdb:0.0.42
 # ============================================================
 FROM node:22-slim
 
@@ -16,7 +16,7 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     SOCKET_PATH=""
 
-# 先装依赖（利用层缓存；npm install 兼容 lock 缺失/简化的场景）
+# 先装依赖（利用层缓存）
 COPY package.json package-lock.json ./
 RUN npm install --omit=dev --no-audit --no-fund --registry=https://registry.npmjs.org
 
