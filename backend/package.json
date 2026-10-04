@@ -1,5 +1,5 @@
 {
-  "name": "custdb-backend",
+  "name": "custdb-combined",
   "version": "1.0.1",
   "private": true,
   "main": "server.js",
