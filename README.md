@@ -1,7 +1,7 @@
 # 通信客户资料库（CustDb）
 
 > 通信行业客户档案 / 套餐管理 / 协议到期提醒 ｜ fnOS Native 应用 + Docker + 安卓 APP + Windows/Linux 桌面版
-> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.28
+> 开发者/发布者：**cp**（manifest、LICENSE 版权人同步）；版本 v0.0.29
 
 ---
 
@@ -18,6 +18,7 @@
 | **管理控制台（v0.0.25）** | 管理员全库视图 + 打印 + 删除自建数据 |
 | **v0.0.27 新增** | 管理员 / 超级管理员登录后主页直接展示**全库客户资料**（不分谁添加、含导入数据）；主页编辑/删除自建数据权限校验（他人数据 403 提示），超管可编辑/删除任意数据 |
 | **v0.0.28 新增** | **移除示例数据**：不再自动注入演示数据，启动自动清理历史示例（含回收站），全库视图只展示真实客户 |
+| **v0.0.29 新增** | **套餐名称/小业务下拉选择 + 手动输入**：新增/编辑客户弹窗中，输入框右侧可见下拉箭头，点击弹出套餐/小业务选项（随运营商过滤，显示月费），点选自动填入；仍可直接手动输入业务库没有的套餐 |
 | **v0.0.26 修复** | 编辑客户/异网用户时，「协议到期日期」留空（选填字段）不再误报格式错误，可正常保存；接口未捕获异常（磁盘满 / 数据库只读 / 锁定）返回 JSON 具体原因，不再只显示“请求失败” |
 | 开发者/发布者（v0.0.22+） | 由 doubao 改为 **cp** |
 
@@ -63,7 +64,7 @@
 
 ## 六、安装 / 部署
 
-- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.28；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
+- **fnOS**：应用中心 → 手动安装 `custdb.fpk`（v0.0.29；升级直接覆盖，数据保留，历史示例首次启动自动清理）。
 - **Docker**：`backend/Dockerfile` + `docker-compose.yml`（源码部署，数据卷 `./custdb-data:/data`）。
 - **Windows / Linux 服务端**：解压 zip → 运行二进制 → 访问 `http://本机IP:5001/app/custdb`。
 - **安卓**：安装 `CustDbApp-app-debug.apk`，首次启动填写服务器地址。
@@ -77,12 +78,12 @@
 backend/
   server.js          # 服务端主程序（Express + node:sqlite，自动加载 server-ext.js）
   server-ext.js      # 四段功能模块（套餐库/导出/超管全库/管理员全库，由 server.js 自动加载）
-  public/            # 前端（index.html / super.html / export-center.html + assets）
+  public/            # 前端（index.html / super.html / export-center.html + assets + picker-enhance.js）
   Dockerfile         # Docker 部署
   docker-compose.yml
 mobile/CustDbApp/    # 安卓 APK 工程（WebView 壳）
 releases/            # 分卷发布物（GitHub 网页单文件限 25MB，大包拆 .z01 + .zip）
-docs/                # 更新内容与发布物清单（docs/v0.0.27-更新内容.md，现为 v0.0.28）
+docs/                # 更新内容与发布物清单（docs/v0.0.27-更新内容.md，现为 v0.0.29）
 CHANGELOG.md
 README.md
 ```
@@ -93,4 +94,4 @@ README.md
 
 ## 八、版本记录
 
-完整版本更迭见 [CHANGELOG.md](CHANGELOG.md)；最新：v0.0.28（移除示例数据，全库视图只展示真实客户；含 v0.0.27 主页全库视图与独立窗口客户端）。
+完整版本更迭见 [CHANGELOG.md](CHANGELOG.md)；最新：v0.0.29（新增/编辑客户弹窗「套餐名称/小业务」下拉选择 + 手动输入，选项随运营商过滤；含 v0.0.28 移除示例数据、v0.0.27 主页全库视图与独立窗口客户端）。
